@@ -2,11 +2,8 @@
 
 from typing import Any
 
-from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    SensorEntity,
-    SensorStateClass,
-)
+from homeassistant.components.sensor import (SensorDeviceClass, SensorEntity,
+                                             SensorStateClass)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -15,7 +12,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .base_entity import DelonghiDeviceEntity
 from .const import DOMAIN
-from .device import DelongiPrimadonna, NOZZLE_STATE
+from .device import NOZZLE_STATE, DelongiPrimadonna
 from .machine_switch import MachineSwitch
 
 
