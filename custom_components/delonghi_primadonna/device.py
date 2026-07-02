@@ -852,7 +852,7 @@ class DelongiPrimadonna:
 
     async def _parse_statistics(self, data: bytes) -> None:
         """Parse statistics response"""
-        if len(data) < 8:
+        if len(data) < 12:
             return
 
         hex_data = hexlify(data, " ").decode('utf-8')
