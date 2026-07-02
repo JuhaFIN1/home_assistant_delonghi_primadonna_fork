@@ -20,7 +20,7 @@
 
 * Delonghi device reports one status at a time: if you remove the water tank first and then remove the coffee grounds container, you get only one warning about the water.
 * Delonghi devices support only one connection. You cannot connect to the device using the native application while this integration is active.
-* Delonghi device may not handle customer disconnection. Your device may die but Delonghi may think it's still connected.
+* Delonghi device may not handle client disconnections or unexpected connection loss. If the Home Assistant connection drops (for example, due to network issues or the host going offline), the coffee machine may still think it's connected.
 
 ## Component to integrate Delonghi coffee machine into the Home Assistant
 
