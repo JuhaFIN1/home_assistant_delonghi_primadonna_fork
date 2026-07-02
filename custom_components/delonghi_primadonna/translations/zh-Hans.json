@@ -82,7 +82,10 @@
           "detached": "已拆卸",
           "steam": "蒸汽",
           "milk_frother": "奶泡器",
-          "milk_frother_cleaning": "奶泡器清洁"
+          "milk_frother_cleaning": "奶泡器清洁",
+          "carafe_needs_cleaning": "咖啡壶需要清洁",
+          "chocolate_container": "巧克力容器",
+          "chocolate_container_needs_cleaning": "巧克力容器需要清洁"
         }
       },
       "switches": {

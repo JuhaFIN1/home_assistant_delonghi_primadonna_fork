@@ -82,7 +82,10 @@
           "detached": "Leválasztva",
           "steam": "Gőz",
           "milk_frother": "Tejhabosító",
-          "milk_frother_cleaning": "Tejhabosító tisztítás"
+          "milk_frother_cleaning": "Tejhabosító tisztítás",
+          "carafe_needs_cleaning": "Kancsó tisztítása szükséges",
+          "chocolate_container": "Csokoládé tartály",
+          "chocolate_container_needs_cleaning": "Csokoládé tartály tisztítása szükséges"
         }
       },
       "switches": {

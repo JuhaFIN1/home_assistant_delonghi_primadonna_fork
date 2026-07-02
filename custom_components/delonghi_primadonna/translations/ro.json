@@ -82,7 +82,10 @@
           "detached": "Detașat",
           "steam": "Abur",
           "milk_frother": "Spumant de lapte",
-          "milk_frother_cleaning": "Curățare spumant de lapte"
+          "milk_frother_cleaning": "Curățare spumant de lapte",
+          "carafe_needs_cleaning": "Carafa necesită curățare",
+          "chocolate_container": "Recipient ciocolată",
+          "chocolate_container_needs_cleaning": "Recipientul de ciocolată necesită curățare"
         }
       },
       "switches": {

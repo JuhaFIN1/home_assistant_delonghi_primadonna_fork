@@ -82,7 +82,10 @@
           "detached": "분리됨",
           "steam": "스팀",
           "milk_frother": "우유 거품기",
-          "milk_frother_cleaning": "우유 거품기 세척"
+          "milk_frother_cleaning": "우유 거품기 세척",
+          "carafe_needs_cleaning": "카라페 세척 필요",
+          "chocolate_container": "초콜릿 용기",
+          "chocolate_container_needs_cleaning": "초콜릿 용기 세척 필요"
         }
       },
       "switches": {

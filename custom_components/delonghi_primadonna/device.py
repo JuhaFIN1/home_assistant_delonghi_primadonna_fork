@@ -603,7 +603,7 @@ class DelongiPrimadonna:
         # Nozzle state (only present in v2 / 0x75 packets)
         if monitor_data.nozzle_state != -1:
             self.steam_nozzle = NOZZLE_STATE.get(
-                monitor_data.nozzle_state, monitor_data.nozzle_state
+                monitor_data.nozzle_state, NOZZLE_STATE[-1]
             )
 
         # Alarm bitmask — feeds the Descale binary sensor (bit 2)

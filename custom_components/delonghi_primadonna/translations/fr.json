@@ -82,7 +82,10 @@
           "detached": "Détaché",
           "steam": "Vapeur",
           "milk_frother": "Mousseur à lait",
-          "milk_frother_cleaning": "Nettoyage mousseur à lait"
+          "milk_frother_cleaning": "Nettoyage mousseur à lait",
+          "carafe_needs_cleaning": "Carafe à nettoyer",
+          "chocolate_container": "Récipient à chocolat",
+          "chocolate_container_needs_cleaning": "Récipient à chocolat à nettoyer"
         }
       },
       "switches": {

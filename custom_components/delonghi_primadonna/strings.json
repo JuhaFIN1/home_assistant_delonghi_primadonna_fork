@@ -82,7 +82,10 @@
                     "detached": "Detached",
                     "steam": "Steam",
                     "milk_frother": "Milk frother",
-                    "milk_frother_cleaning": "Milk frother cleaning"
+                    "milk_frother_cleaning": "Milk frother cleaning",
+                    "carafe_needs_cleaning": "Carafe needs cleaning",
+                    "chocolate_container": "Chocolate container",
+                    "chocolate_container_needs_cleaning": "Chocolate container needs cleaning"
                 }
             },
             "switches": {

@@ -82,7 +82,10 @@
           "detached": "Odpojená",
           "steam": "Para",
           "milk_frother": "Spenic mlieka",
-          "milk_frother_cleaning": "Cistenie spenica"
+          "milk_frother_cleaning": "Cistenie spenica",
+          "carafe_needs_cleaning": "Karafa vyžaduje čistenie",
+          "chocolate_container": "Nádoba na čokoládu",
+          "chocolate_container_needs_cleaning": "Nádoba na čokoládu vyžaduje čistenie"
         }
       },
       "switches": {

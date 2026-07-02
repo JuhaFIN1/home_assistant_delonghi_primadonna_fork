@@ -82,7 +82,10 @@
           "detached": "取り外し済み",
           "steam": "スチーム",
           "milk_frother": "ミルクフォーマー",
-          "milk_frother_cleaning": "ミルクフォーマー洗浄"
+          "milk_frother_cleaning": "ミルクフォーマー洗浄",
+          "carafe_needs_cleaning": "カラフェの洗浄が必要",
+          "chocolate_container": "チョコレート容器",
+          "chocolate_container_needs_cleaning": "チョコレート容器の洗浄が必要"
         }
       },
       "switches": {

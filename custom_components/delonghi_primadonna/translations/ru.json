@@ -82,7 +82,10 @@
           "detached": "Отсоединена",
           "steam": "Пар",
           "milk_frother": "Капучинатор",
-          "milk_frother_cleaning": "Очистка капучинатора"
+          "milk_frother_cleaning": "Очистка капучинатора",
+          "carafe_needs_cleaning": "Графин требует очистки",
+          "chocolate_container": "Ёмкость для шоколада",
+          "chocolate_container_needs_cleaning": "Ёмкость для шоколада требует очистки"
         }
       },
       "switches": {

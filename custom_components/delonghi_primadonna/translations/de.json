@@ -82,7 +82,10 @@
           "detached": "Abgenommen",
           "steam": "Dampf",
           "milk_frother": "Milchaufschäumer",
-          "milk_frother_cleaning": "Milchaufschäumer Reinigung"
+          "milk_frother_cleaning": "Milchaufschäumer Reinigung",
+          "carafe_needs_cleaning": "Karaffe muss gereinigt werden",
+          "chocolate_container": "Schokoladenbehälter",
+          "chocolate_container_needs_cleaning": "Schokoladenbehälter muss gereinigt werden"
         }
       },
       "switches": {

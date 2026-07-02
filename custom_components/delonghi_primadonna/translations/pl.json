@@ -82,7 +82,10 @@
           "detached": "Odłączona",
           "steam": "Para",
           "milk_frother": "Spieniacz mleka",
-          "milk_frother_cleaning": "Czyszczenie spieniacza mleka"
+          "milk_frother_cleaning": "Czyszczenie spieniacza mleka",
+          "carafe_needs_cleaning": "Karafka wymaga czyszczenia",
+          "chocolate_container": "Pojemnik na czekoladę",
+          "chocolate_container_needs_cleaning": "Pojemnik na czekoladę wymaga czyszczenia"
         }
       },
       "switches": {

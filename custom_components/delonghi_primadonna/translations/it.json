@@ -82,7 +82,10 @@
           "detached": "Scollegato",
           "steam": "Vapore",
           "milk_frother": "Montalatte",
-          "milk_frother_cleaning": "Pulizia montalatte"
+          "milk_frother_cleaning": "Pulizia montalatte",
+          "carafe_needs_cleaning": "Caraffa da pulire",
+          "chocolate_container": "Contenitore cioccolata",
+          "chocolate_container_needs_cleaning": "Contenitore cioccolata da pulire"
         }
       },
       "switches": {
