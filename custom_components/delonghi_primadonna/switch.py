@@ -190,7 +190,9 @@ class DelongiPrimadonnaTimeSyncSwitch(
 
     def turn_on(self, **kwargs: Any) -> None:
         """Turn the sounds on."""
-        self.hass.async_create_task(self.device.set_time(datetime.now()))
+        self.hass.async_create_task(
+            self.device.set_time(datetime.datetime.now())
+        )
         self._attr_is_on = True
 
     def turn_off(self, **kwargs: Any) -> None:
