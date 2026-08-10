@@ -712,11 +712,16 @@ class DelongiPrimadonna:
         async with self._lock:
             try:
                 await self._connect()
-                self.hostname = bytes(
-                    await self._client.read_gatt_char(
-                        uuid.UUID(NAME_CHARACTERISTIC)
-                    )
-                ).decode('utf-8')
+                try:
+                    self.hostname = bytes(
+                        await self._client.read_gatt_char(
+                            uuid.UUID(NAME_CHARACTERISTIC)
+                        )
+                    ).decode('utf-8')
+                except (BleakError, Exception) as error:
+                    _LOGGER.info('Could not read NAME_CHARACTERISTIC: %s', error)
+                    if not self.hostname:
+                        self.hostname = self.name or "DeLonghi PrimaDonna"
                 await self._client.write_gatt_char(
                     uuid.UUID(CONTROLL_CHARACTERISTIC), bytearray(DEBUG)
                 )
