@@ -712,7 +712,6 @@ class DelongiPrimadonna:
         async with self._lock:
             try:
                 await self._connect()
-                self.hostname = ''
                 try:
                     self.hostname = bytes(
                         await self._client.read_gatt_char(
@@ -720,7 +719,7 @@ class DelongiPrimadonna:
                         )
                     ).decode('utf-8')
                 except BleakError as error:
-                    _LOGGER.info('Could not read NAME_CHARACTERISTIC: %s', error)
+                    _LOGGER.debug('Could not read NAME_CHARACTERISTIC: %s', error)
                     self.hostname = self.name or DEFAULT_DEVICE_NAME
                 await self._client.write_gatt_char(
                     uuid.UUID(CONTROLL_CHARACTERISTIC), bytearray(DEBUG)
