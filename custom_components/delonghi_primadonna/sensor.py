@@ -247,10 +247,11 @@ class DelongiPrimadonnaStatisticsSensor(
 
     async def async_update(self) -> None:
         """Fetch new state data for the sensor."""
-        if self.device.connected:
-            self.hass.async_create_task(
-                self.device.update_statistics()
-            )
+        if self.device.connected and self.device.available:
+            # update_statistics() throttles itself to once a minute; awaiting
+            # it avoids stacking one background task per statistics sensor
+            # on every poll cycle.
+            await self.device.update_statistics()
 
 
 class DelongiPrimadonnaUtilitySensor(DelongiPrimadonnaStatisticsSensor):
