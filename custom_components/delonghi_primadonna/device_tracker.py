@@ -56,5 +56,11 @@ class DelongiPrimadonnaDeviceTracker(DelonghiDeviceEntity, ScannerEntity):
         return self.device.connected
 
     async def async_update(self):
-        """Updates the device status"""
-        self.hass.async_create_task(self.device.get_device_name())
+        """Update the device status.
+
+        ``async_refresh()`` is a no-op when the machine is not advertising,
+        so polling an absent machine no longer costs a connection attempt.
+        Awaiting it instead of firing a background task also keeps
+        overlapping refreshes from piling up.
+        """
+        await self.device.async_refresh()

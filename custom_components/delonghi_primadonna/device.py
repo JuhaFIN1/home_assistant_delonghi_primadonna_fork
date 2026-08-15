@@ -19,7 +19,16 @@ from bleak import BleakClient
 from bleak.exc import BleakDBusError, BleakError
 from homeassistant.components import bluetooth
 from homeassistant.const import CONF_MAC, CONF_MODEL, CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+
+try:
+    from bleak_retry_connector import (BleakClientWithServiceCache,
+                                       establish_connection)
+    HAS_RETRY_CONNECTOR = True
+except ImportError:  # pragma: no cover - very old Home Assistant
+    BleakClientWithServiceCache = BleakClient
+    establish_connection = None
+    HAS_RETRY_CONNECTOR = False
 
 from .const import (AMERICANO_OFF, AMERICANO_ON, AVAILABLE_PROFILES,
                     BASE_COMMAND, BEVERAGE_NONE, BYTES_AUTOPOWEROFF_COMMAND,
@@ -43,6 +52,19 @@ from .model import get_machine_model
 _LOGGER = logging.getLogger(__name__)
 
 START_BYTE = 0xD0
+
+# Backoff applied when the machine is advertising but refuses connections.
+# Without this the integration retries at the entity poll rate forever.
+MIN_BACKOFF = 30
+MAX_BACKOFF = 900
+
+
+class DeviceNotPresent(BleakError):
+    """Raised when the machine is not advertising.
+
+    This is an expected, boring condition (machine switched off or out of
+    range) and must never be logged above debug level.
+    """
 
 
 @dataclass
@@ -296,6 +318,15 @@ class DelongiPrimadonna:
         self._rx_buffer = bytearray()
         self._response_event = None
         self._last_response: bytes | None = None
+        # --- availability / backoff bookkeeping -------------------------
+        # ``_present`` mirrors what the Bluetooth stack sees (advertising),
+        # ``connected`` means we actually hold a GATT connection.
+        self._present = False
+        self._unsub_bluetooth = None
+        self._unsub_unavailable = None
+        self._backoff = MIN_BACKOFF
+        self._retry_after = 0.0
+        self._failure_logged = False
         self.statistics: dict[int, int | float] = {}
         self._last_stats_request = 0.0
         self._stats_lock = asyncio.Lock()
@@ -347,9 +378,140 @@ class DelongiPrimadonna:
             # Fallback to legacy enum if no recipes
             self.available_beverages = [*AvailableBeverage]
 
+    # ------------------------------------------------------------------
+    # Lifecycle / availability
+    # ------------------------------------------------------------------
+
+    async def async_start(self) -> None:
+        """Start watching for the machine's advertisements.
+
+        Instead of polling a possibly absent device we let the Bluetooth
+        integration tell us when it shows up. A machine that is switched
+        off simply produces no callbacks, and therefore no log lines.
+        """
+        self._present = bluetooth.async_address_present(
+            self._hass, self.mac, connectable=True
+        )
+        self._unsub_bluetooth = bluetooth.async_register_callback(
+            self._hass,
+            self._async_on_advertisement,
+            {'address': self.mac.upper(), 'connectable': True},
+            bluetooth.BluetoothScanningMode.ACTIVE,
+        )
+        # Let the Bluetooth stack tell us when the machine stops
+        # advertising, so state flips promptly instead of on the next poll.
+        self._unsub_unavailable = bluetooth.async_track_unavailable(
+            self._hass,
+            self._async_on_unavailable,
+            self.mac.upper(),
+            connectable=True,
+        )
+        _LOGGER.debug(
+            'Watching %s, present at startup: %s', self.mac, self._present
+        )
+        if self._present:
+            await self.async_refresh()
+
+    async def async_stop(self) -> None:
+        """Stop watching and drop the connection."""
+        for unsub_name in ('_unsub_bluetooth', '_unsub_unavailable'):
+            unsub = getattr(self, unsub_name)
+            if unsub is not None:
+                unsub()
+                setattr(self, unsub_name, None)
+        await self.disconnect()
+
+    @callback
+    def _async_on_unavailable(self, _service_info) -> None:
+        """Handle the machine no longer being advertised."""
+        if self._present:
+            _LOGGER.info('%s went out of range', self.name)
+        self._present = False
+        self.connected = False
+
+    @callback
+    def _async_on_advertisement(self, service_info, change) -> None:
+        """Handle an advertisement from the machine."""
+        was_present = self._present
+        self._present = True
+        if not was_present:
+            _LOGGER.info('%s is back in range', self.name)
+            # A fresh advertisement means a fresh start: forget the backoff
+            # accumulated while the machine was away.
+            self._reset_backoff()
+            self._hass.async_create_task(self.async_refresh())
+
+    @property
+    def available(self) -> bool:
+        """Whether the machine is reachable at all."""
+        return self._present
+
+    def _address_present(self) -> bool:
+        """Ask the Bluetooth stack whether the machine is advertising."""
+        present = bluetooth.async_address_present(
+            self._hass, self.mac, connectable=True
+        )
+        if not present and self._present:
+            _LOGGER.info('%s went out of range', self.name)
+        self._present = present
+        return present
+
+    def _reset_backoff(self) -> None:
+        self._backoff = MIN_BACKOFF
+        self._retry_after = 0.0
+        self._failure_logged = False
+
+    def _note_failure(self, error: Exception) -> None:
+        """Record a failed connection and widen the retry window."""
+        if isinstance(error, DeviceNotPresent):
+            # Not a failure at all: the machine is simply off. The
+            # advertisement callback wakes us up when it returns.
+            _LOGGER.debug('%s is not advertising', self.mac)
+            return
+        self._retry_after = time.monotonic() + self._backoff
+        # Log the first failure of a streak at warning level so real
+        # problems stay visible, then stay quiet until we recover.
+        if not self._failure_logged:
+            _LOGGER.warning(
+                'Cannot reach %s (%s: %s). Retrying with backoff, '
+                'further attempts are logged at debug level.',
+                self.name,
+                type(error).__name__,
+                error,
+            )
+            self._failure_logged = True
+        else:
+            _LOGGER.debug(
+                'Connection to %s still failing (%s), next try in %ss',
+                self.mac,
+                error,
+                self._backoff,
+            )
+        self._backoff = min(self._backoff * 2, MAX_BACKOFF)
+
+    async def async_refresh(self) -> None:
+        """Refresh machine state, but only when that can possibly work.
+
+        This replaces the old behaviour where every entity poll produced a
+        connection attempt regardless of whether the machine existed.
+        """
+        if not self._address_present():
+            self.connected = False
+            return
+        if time.monotonic() < self._retry_after:
+            return
+        await self.get_device_name()
+
+    @callback
+    def _async_disconnected(self, _client) -> None:
+        """Handle the machine dropping the GATT link."""
+        _LOGGER.debug('Disconnected from %s', self.mac)
+        self._client = None
+        self.connected = False
+
     async def disconnect(self):
         """Disconnect from the device."""
-        _LOGGER.info("Disconnect from %s", self.mac)
+        _LOGGER.debug("Disconnect from %s", self.mac)
         async with self._lock:
             client = self._client
             if client is not None and client.is_connected:
@@ -359,7 +521,7 @@ class DelongiPrimadonna:
                     asyncio.TimeoutError,
                     Exception,
                 ) as error:  # noqa: BLE001
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "Forced disconnect [%s]: %s",
                         type(error).__name__,
                         error
@@ -372,65 +534,75 @@ class DelongiPrimadonna:
                 self.connected = False
 
     async def _connect(self, retries=3):
-        """Connect to the device."""
+        """Connect to the device.
+
+        Retries are delegated to ``bleak_retry_connector``, which knows how
+        to deal with ESPHome proxies, transient GATT errors and the various
+        backend quirks far better than a hand written loop. It also keeps
+        Home Assistant from logging its own "connect() called without
+        bleak-retry-connector" warning on every attempt.
+        """
+        if self._client is not None and self._client.is_connected:
+            return
+
         self._connecting = True
-        last_error = None
-        for attempt in range(retries):
-            try:
-                if self._client is None or not self._client.is_connected:
-                    self._device = bluetooth.async_ble_device_from_address(
-                        self._hass, self.mac, connectable=True
-                    )
-                    if not self._device:
-                        raise BleakError(
-                            (
-                                f"A device with address {self.mac}"
-                                " could not be found."
-                            )
-                        )
-                    self._client = BleakClient(self._device)
-                    _LOGGER.info(
-                        "Connect to %s (attempt %d)",
-                        self.mac,
-                        attempt + 1,
-                    )
-                    await asyncio.wait_for(
-                        self._client.connect(),
-                        timeout=10,
-                    )
-                    # Service discovery is performed during the connection
-                    # process. Accessing ``get_services`` directly raises a
-                    # ``FutureWarning`` in recent versions of Bleak.
-                    # ``self._client.services`` will contain the discovered
-                    # services once the connection succeeds.
-                    await asyncio.wait_for(
-                        self._client.start_notify(
-                            uuid.UUID(CONTROLL_CHARACTERISTIC),
-                            self._process_raw_data,
-                        ),
-                        timeout=10,
-                    )
-                self._connecting = False
-                return
-            except Exception as error:
-                _LOGGER.warning(
-                    "BLE connect error: %s (type: %s, attempt %d)",
-                    error,
-                    type(error).__name__,
-                    attempt + 1,
+        try:
+            self._device = bluetooth.async_ble_device_from_address(
+                self._hass, self.mac, connectable=True
+            )
+            if not self._device:
+                # Expected whenever the machine is off or out of range.
+                self._present = False
+                raise DeviceNotPresent(
+                    f'{self.mac} is not advertising'
                 )
-                if self._client is not None:
-                    try:
-                        await asyncio.wait_for(
-                            self._client.disconnect(), timeout=5
+
+            _LOGGER.debug('Connecting to %s', self.mac)
+
+            if HAS_RETRY_CONNECTOR:
+                self._client = await establish_connection(
+                    BleakClientWithServiceCache,
+                    self._device,
+                    self.name or self.mac,
+                    self._async_disconnected,
+                    max_attempts=retries,
+                    ble_device_callback=lambda: (
+                        bluetooth.async_ble_device_from_address(
+                            self._hass, self.mac, connectable=True
                         )
-                    except Exception:  # noqa: BLE001
-                        pass
-                self._client = None
-                last_error = error
-                await asyncio.sleep(2)
-        self._connecting = False
-        raise last_error
+                    ),
+                )
+            else:  # pragma: no cover - legacy fallback
+                self._client = BleakClient(
+                    self._device,
+                    disconnected_callback=self._async_disconnected,
+                )
+                await asyncio.wait_for(self._client.connect(), timeout=20)
+
+            # Service discovery happens during connect; ``client.services``
+            # holds the result. Do not call get_services() - it raises a
+            # FutureWarning on recent Bleak.
+            await asyncio.wait_for(
+                self._client.start_notify(
+                    uuid.UUID(CONTROLL_CHARACTERISTIC),
+                    self._process_raw_data,
+                ),
+                timeout=10,
+            )
+            self._reset_backoff()
+        except Exception as error:
+            client = self._client
+            self._client = None
+            self.connected = False
+            if client is not None:
+                try:
+                    await asyncio.wait_for(client.disconnect(), timeout=5)
+                except Exception:  # noqa: BLE001
+                    pass
+            self._note_failure(error)
+            raise
+        finally:
+            self._connecting = False
 
     def _make_switch_command(self):
         """Make hex command"""
@@ -480,7 +652,7 @@ class DelongiPrimadonna:
                     'notification_id': f'{self.mac}_err_{uuid.uuid4()}',
                 },
             )
-        _LOGGER.info('Event triggered: %s', event_data)
+        _LOGGER.debug('Event triggered: %s', event_data)
 
     async def _process_raw_data(self, sender, value):
         """Assemble incoming BLE packets and pass complete messages."""
@@ -555,7 +727,7 @@ class DelongiPrimadonna:
         hex_value = hexlify(value, ' ')
 
         if self._device_status != hex_value:
-            _LOGGER.info(
+            _LOGGER.debug(
                 'Received data: %s from %s',
                 hex_value,
                 sender
@@ -720,19 +892,25 @@ class DelongiPrimadonna:
                 await self._client.write_gatt_char(
                     uuid.UUID(CONTROLL_CHARACTERISTIC), bytearray(DEBUG)
                 )
+                if not self.connected:
+                    _LOGGER.info('Connected to %s', self.name)
                 self.connected = True
+            # _connect() already logged the first failure of a streak and
+            # armed the backoff, so these handlers stay at debug level.
+            except DeviceNotPresent:
+                self.connected = False
             except BleakDBusError as error:
                 self.connected = False
-                _LOGGER.warning('BleakDBusError: %s', error)
+                _LOGGER.debug('BleakDBusError: %s', error)
             except BleakError as error:
                 self.connected = False
-                _LOGGER.warning('BleakError: %s', error)
+                _LOGGER.debug('BleakError: %s', error)
             except asyncio.exceptions.TimeoutError as error:
                 self.connected = False
-                _LOGGER.info('TimeoutError: %s at device connection', error)
+                _LOGGER.debug('TimeoutError: %s at device connection', error)
             except asyncio.exceptions.CancelledError as error:
                 self.connected = False
-                _LOGGER.warning('CancelledError: %s', error)
+                _LOGGER.debug('CancelledError: %s', error)
 
         if self.connected and not self._profiles_loaded:
             command = BYTES_LOAD_PROFILES.copy()
@@ -780,6 +958,14 @@ class DelongiPrimadonna:
         await self.send_command(message)
 
     async def send_command(self, message, retries=3):
+        if not self._address_present():
+            # Nothing to talk to. One debug line beats three warnings and
+            # an error every time somebody presses a button.
+            _LOGGER.debug(
+                'Skipping command, %s is not in range', self.name
+            )
+            self.connected = False
+            return
         async with self._lock:
             message_to_send = copy.deepcopy(message)
             for attempt in range(retries):
@@ -789,7 +975,7 @@ class DelongiPrimadonna:
                     crc_bytes = crc.to_bytes(2, byteorder='big')
                     message_to_send[-2] = crc_bytes[0]
                     message_to_send[-1] = crc_bytes[1]
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         'Send command: %s',
                         hexlify(bytearray(message_to_send), " ")
                     )
@@ -803,23 +989,33 @@ class DelongiPrimadonna:
                             timeout=10,
                         )
                     except asyncio.TimeoutError:
-                        _LOGGER.warning(
+                        # The machine ignores some commands depending on its
+                        # current state. Debug, not warning: statistics polls
+                        # send five commands at a time.
+                        _LOGGER.debug(
                             'Timeout waiting for response to command: %s',
                             hexlify(bytearray(message_to_send), " ")
                         )
                     finally:
                         self._response_event = None
                     return
+                except DeviceNotPresent:
+                    self.connected = False
+                    return
                 except BleakError as error:
                     self.connected = False
                     self._client = None
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         'BleakError: %s (attempt %d)',
                         error,
                         attempt + 1
                     )
                     await asyncio.sleep(2)
-            _LOGGER.error('Failed to send command after %d attempts', retries)
+            _LOGGER.warning(
+                'Failed to send command to %s after %d attempts',
+                self.name,
+                retries,
+            )
 
     async def _parse_statistics(self, data: bytes) -> None:
         """Parse statistics response"""
