@@ -1,0 +1,231 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Le dispositif est déjà configuré"
+    },
+    "error": {
+      "cannot_connect": "Echec de la connexion",
+      "invalid_auth": "Authentification invalide",
+      "unknown": "Erreur inattendue"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "mac": "MAC",
+          "name": "Nom",
+          "model": "Modèle"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "profile": {
+        "name": "Profil"
+      },
+      "make_beverage": {
+        "name": "Boisson"
+      },
+      "energy_save_mode": {
+        "name": "Éteindre après"
+      },
+      "water_hardness": {
+        "name": "Dureté de l'eau"
+      },
+      "water_temperature": {
+        "name": "Température de l'eau"
+      }
+    },
+    "button": {
+      "power_on": {
+        "name": "Allumer"
+      }
+    },
+    "switch": {
+      "cup_light": {
+        "name": "Mettre un feu à la lumière"
+      },
+      "debug_notification": {
+        "name": "Notification de débogage"
+      },
+      "energy_save_mode": {
+        "name": "Mode d'économie d'énergie"
+      },
+      "sounds": {
+        "name": "Sons"
+      },
+      "time_sync": {
+        "name": "Synchronisation de l'heure"
+      }
+    },
+    "binary_sensor": {
+      "descaling": {
+        "name": "Détartrage"
+      },
+      "filter": {
+        "name": "Filtre"
+      },
+      "enabled": {
+        "name": "Activé"
+      }
+    },
+    "text": {
+      "debug_input": {
+        "name": "Entrée débogage"
+      }
+    },
+    "sensor": {
+      "nozzle_status": {
+        "name": "État de la buse",
+        "state": {
+          "unknown": "Inconnu",
+          "detached": "Détaché",
+          "steam": "Vapeur",
+          "milk_frother": "Mousseur à lait",
+          "milk_frother_cleaning": "Nettoyage mousseur à lait",
+          "carafe_needs_cleaning": "Carafe à nettoyer",
+          "chocolate_container": "Récipient à chocolat",
+          "chocolate_container_needs_cleaning": "Récipient à chocolat à nettoyer"
+        }
+      },
+      "switches": {
+        "name": "Interrupteurs",
+        "state": {
+          "none": "Aucun",
+          "water_spout": "Sortie d'eau",
+          "motor_up": "Moteur vers le haut",
+          "motor_down": "Moteur vers le bas",
+          "coffee_waste_container": "Bac à marc de café",
+          "water_tank_absent": "Réservoir d'eau absent",
+          "knob": "Bouton",
+          "water_level_low": "Niveau d'eau bas",
+          "coffee_jug": "Carafe à café",
+          "ifd_caraffe": "Carafe à lait",
+          "ciocco_tank": "Réservoir de chocolat",
+          "clean_knob": "Bouton de nettoyage",
+          "door_opened": "Porte ouverte",
+          "preground_door_opened": "Trappe à café moulu ouverte",
+          "unknown_switch": "Interrupteur inconnu"
+        }
+      },
+      "device_status": {
+        "name": "État de l'appareil",
+        "state": {
+          "empty_water_tank": "Réservoir d'eau vide",
+          "coffee_waste_container_full": "Bac à marc plein",
+          "descale_alarm": "Alarme détartrage",
+          "replace_water_filter": "Remplacer le filtre à eau",
+          "coffee_ground_too_fine": "Mouture trop fine",
+          "coffee_beans_empty": "Bac à grains vide",
+          "machine_to_service": "Entretien machine",
+          "coffee_heater_probe_failure": "Panne sonde chauffage café",
+          "too_much_coffee": "Trop de café",
+          "coffee_infuser_motor_not_working": "Moteur infuseur ne fonctionne pas",
+          "steamer_probe_failure": "Panne sonde vapeur",
+          "empty_drip_tray": "Vider le bac d'égouttage",
+          "hydraulic_circuit_problem": "Problème circuit hydraulique",
+          "tank_is_in_position": "Réservoir en position",
+          "clean_knob": "Nettoyer le bouton",
+          "coffee_beans_empty_two": "Bac à grains 2 vide",
+          "tank_too_full": "Réservoir trop plein",
+          "bean_hopper_absent": "Bac à grains absent",
+          "grid_presence": "Grille présente",
+          "infuser_sense": "Capteur infuseur",
+          "not_enough_coffee": "Pas assez de café",
+          "expansion_comm_prob": "Problème communication expansion",
+          "expansion_submodules_prob": "Problème sous-modules expansion",
+          "grinding_unit_1_problem": "Problème broyeur 1",
+          "grinding_unit_2_problem": "Problème broyeur 2",
+          "condense_fan_problem": "Problème ventilateur condensation",
+          "clock_bt_comm_problem": "Problème communication horloge/BT",
+          "spi_comm_problem": "Problème communication SPI",
+          "unknown_alarm": "Alarme inconnue",
+          "ignore_alarm": "Alarme ignorée",
+          "turned_off": "Éteint",
+          "heating": "Chauffage",
+          "washing": "Lavage",
+          "ready": "Prêt",
+          "brewing": "Préparation du café",
+          "rinsing": "Rinçage",
+          "preparing": "Préparation",
+          "delivering_hot_water": "Distribution d'eau chaude",
+          "cleaning_milk_spout": "Nettoyage de la buse à lait",
+          "descaling": "Détartrage"
+        }
+      },
+      "total_coffee": {
+        "name": "Total café"
+      },
+      "total_coffee_with_milk": {
+        "name": "Total café au lait"
+      },
+      "total_water": {
+        "name": "Total eau"
+      },
+      "descaling_count": {
+        "name": "Nombre de détartrages"
+      },
+      "milk_cleaning_count": {
+        "name": "Nombre de nettoyages lait"
+      },
+      "filter_replace_count": {
+        "name": "Remplacements de filtre"
+      },
+      "total_tea": {
+        "name": "Total thé"
+      },
+      "total_choco": {
+        "name": "Total chocolat"
+      },
+      "total_cold_milk": {
+        "name": "Lait froid total"
+      },
+      "daily_coffee": {
+        "name": "Café quotidien"
+      },
+      "weekly_coffee": {
+        "name": "Café hebdomadaire"
+      },
+      "daily_water": {
+        "name": "Eau quotidienne"
+      },
+      "weekly_water": {
+        "name": "Eau hebdomadaire"
+      },
+      "additional_coffee": {
+        "name": "Café supplémentaire"
+      }
+    }
+  },
+  "services": {
+    "make_beverage": {
+      "name": "Faire des boissons",
+      "description": "Préparez une boisson à partir de la liste ci-dessous",
+      "fields": {
+        "beverage": {
+          "name": "Boisson",
+          "description": "Boisson à préparer"
+        },
+        "entity_id": {
+          "name": "ID de l'entité",
+          "description": "ID de l'entité de la machine à café"
+        }
+      }
+    }
+  },
+  "selector": {
+    "beverage": {
+      "options": {
+        "none": "Aucun",
+        "steam": "Vapeur",
+        "long": "Long",
+        "coffee": "Café",
+        "dopio": "Double",
+        "hot_water": "Eau chaude",
+        "espresso": "Espresso",
+        "americano": "Américain",
+        "espresso2": "Expresso 2"
+      }
+    }
+  }
+}

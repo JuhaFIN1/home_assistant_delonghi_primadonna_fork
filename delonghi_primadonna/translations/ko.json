@@ -1,0 +1,231 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "장치는 이미 구성되어 있습니다"
+    },
+    "error": {
+      "cannot_connect": "연결하지 못했습니다",
+      "invalid_auth": "잘못된 인증",
+      "unknown": "예상치 못한 오류"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "mac": "MAC",
+          "name": "이름",
+          "model": "모델"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "profile": {
+        "name": "윤곽"
+      },
+      "make_beverage": {
+        "name": "음료"
+      },
+      "energy_save_mode": {
+        "name": "후에 꺼집니다"
+      },
+      "water_hardness": {
+        "name": "물 경도"
+      },
+      "water_temperature": {
+        "name": "수온"
+      }
+    },
+    "button": {
+      "power_on": {
+        "name": "켜십시오"
+      }
+    },
+    "switch": {
+      "cup_light": {
+        "name": "컵 라이트"
+      },
+      "debug_notification": {
+        "name": "디버그 알림"
+      },
+      "energy_save_mode": {
+        "name": "에너지 저장 모드"
+      },
+      "sounds": {
+        "name": "소리"
+      },
+      "time_sync": {
+        "name": "時間 동기화"
+      }
+    },
+    "binary_sensor": {
+      "descaling": {
+        "name": "석회 제거"
+      },
+      "filter": {
+        "name": "필터"
+      },
+      "enabled": {
+        "name": "활성화됨"
+      }
+    },
+    "text": {
+      "debug_input": {
+        "name": "디버그 입력"
+      }
+    },
+    "sensor": {
+      "nozzle_status": {
+        "name": "노즐 상태",
+        "state": {
+          "unknown": "알 수 없음",
+          "detached": "분리됨",
+          "steam": "스팀",
+          "milk_frother": "우유 거품기",
+          "milk_frother_cleaning": "우유 거품기 세척",
+          "carafe_needs_cleaning": "카라페 세척 필요",
+          "chocolate_container": "초콜릿 용기",
+          "chocolate_container_needs_cleaning": "초콜릿 용기 세척 필요"
+        }
+      },
+      "switches": {
+        "name": "스위치",
+        "state": {
+          "none": "없음",
+          "water_spout": "물 노출구",
+          "motor_up": "모터 위",
+          "motor_down": "모터 아래",
+          "coffee_waste_container": "커피 찌꺼기 통",
+          "water_tank_absent": "물탱크 없음",
+          "knob": "노브",
+          "water_level_low": "물 레벨 낮음",
+          "coffee_jug": "커피 저그",
+          "ifd_caraffe": "우유 카라페",
+          "ciocco_tank": "초콜릿 탱크",
+          "clean_knob": "청소 노브",
+          "door_opened": "문 열림",
+          "preground_door_opened": "가루 커피 투입구 열림",
+          "unknown_switch": "Unknown switch"
+        }
+      },
+      "device_status": {
+        "name": "기기 상태",
+        "state": {
+          "empty_water_tank": "물탱크가 비어 있습니다",
+          "coffee_waste_container_full": "커피 찌꺼기 컨테이너가 가득 찼습니다",
+          "descale_alarm": "석회질 제거 알람",
+          "replace_water_filter": "정수 필터를 교체하십시오",
+          "coffee_ground_too_fine": "분쇄도가 너무 가늘습니다",
+          "coffee_beans_empty": "커피 원두가 비어 있습니다",
+          "machine_to_service": "서비스가 필요합니다",
+          "coffee_heater_probe_failure": "커피 히터 프로브 고장",
+          "too_much_coffee": "커피가 너무 많습니다",
+          "coffee_infuser_motor_not_working": "인퓨저 모터 고장",
+          "steamer_probe_failure": "스티머 프로브 고장",
+          "empty_drip_tray": "드립 트레이를 비우십시오",
+          "hydraulic_circuit_problem": "유압 회로 문제",
+          "tank_is_in_position": "탱크가 제자리에 있습니다",
+          "clean_knob": "청소 노브",
+          "coffee_beans_empty_two": "보조 커피 원두가 비어 있습니다",
+          "tank_too_full": "탱크가 너무 가득 찼습니다",
+          "bean_hopper_absent": "원두 호퍼가 없습니다",
+          "grid_presence": "그리드 존재",
+          "infuser_sense": "인퓨저 감지",
+          "not_enough_coffee": "커피가 충분하지 않습니다",
+          "expansion_comm_prob": "확장 통신 문제",
+          "expansion_submodules_prob": "확장 하위 모듈 문제",
+          "grinding_unit_1_problem": "그라인더 1 문제",
+          "grinding_unit_2_problem": "그라인더 2 문제",
+          "condense_fan_problem": "응축 팬 문제",
+          "clock_bt_comm_problem": "시계/BT 통신 문제",
+          "spi_comm_problem": "SPI 통신 문제",
+          "unknown_alarm": "알 수 없는 알람",
+          "ignore_alarm": "알람 무시",
+          "turned_off": "전원 꺼짐",
+          "heating": "가열 중",
+          "washing": "세척 중",
+          "ready": "준비 완료",
+          "brewing": "추출 중",
+          "rinsing": "헹굼 중",
+          "preparing": "준비 중",
+          "delivering_hot_water": "온수 추출 중",
+          "cleaning_milk_spout": "우유 배출구 세척",
+          "descaling": "스케일 제거"
+        }
+      },
+      "total_coffee": {
+        "name": "총 커피 수"
+      },
+      "total_coffee_with_milk": {
+        "name": "총 우유 커피 수"
+      },
+      "total_water": {
+        "name": "총 수량"
+      },
+      "descaling_count": {
+        "name": "석회질 제거 횟수"
+      },
+      "milk_cleaning_count": {
+        "name": "우유 청소 횟수"
+      },
+      "filter_replace_count": {
+        "name": "필터 교체 횟수"
+      },
+      "total_tea": {
+        "name": "총 차 수"
+      },
+      "total_choco": {
+        "name": "총 초코 수"
+      },
+      "total_cold_milk": {
+        "name": "냉우유 합계"
+      },
+      "daily_coffee": {
+        "name": "일간 커피"
+      },
+      "weekly_coffee": {
+        "name": "주간 커피"
+      },
+      "daily_water": {
+        "name": "일간 물"
+      },
+      "weekly_water": {
+        "name": "주간 물"
+      },
+      "additional_coffee": {
+        "name": "추가 커피"
+      }
+    }
+  },
+  "services": {
+    "make_beverage": {
+      "name": "음료를 만드십시오",
+      "description": "아래 목록에서 음료를 준비하십시오",
+      "fields": {
+        "beverage": {
+          "name": "음료",
+          "description": "준비 할 음료"
+        },
+        "entity_id": {
+          "name": "엔티티 ID",
+          "description": "커피 머신의 엔티티 ID"
+        }
+      }
+    }
+  },
+  "selector": {
+    "beverage": {
+      "options": {
+        "none": "없음",
+        "steam": "증기",
+        "long": "긴",
+        "coffee": "커피",
+        "dopio": "더블",
+        "hot_water": "뜨거운 물",
+        "espresso": "에스프레소 커피",
+        "americano": "아메리카노",
+        "espresso2": "에스프레소 2"
+      }
+    }
+  }
+}

@@ -1,0 +1,235 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Zariadenie je uz nastavene"
+    },
+    "error": {
+      "cannot_connect": "Nepodarilo sa pripojit",
+      "invalid_auth": "Nespravna autentifikacia",
+      "unknown": "Neocakavana chyba"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "mac": "MAC adresa",
+          "name": "Nazov",
+          "model": "Model"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "profile": {
+        "name": "Profil"
+      },
+      "make_beverage": {
+        "name": "Napoj"
+      },
+      "energy_save_mode": {
+        "name": "Vypnut po"
+      },
+      "water_hardness": {
+        "name": "Tvrdost vody"
+      },
+      "water_temperature": {
+        "name": "Teplota vody"
+      }
+    },
+    "button": {
+      "power_on": {
+        "name": "Zapnut"
+      }
+    },
+    "switch": {
+      "cup_light": {
+        "name": "Osvetlenie šálky"
+      },
+      "debug_notification": {
+        "name": "Ladiace notifikácie"
+      },
+      "energy_save_mode": {
+        "name": "Úsporný režim"
+      },
+      "sounds": {
+        "name": "Zvuky"
+      },
+      "time_sync": {
+        "name": "Synchronizácia času"
+      }
+    },
+    "binary_sensor": {
+      "descaling": {
+        "name": "Odvápnenie"
+      },
+      "filter": {
+        "name": "Filter"
+      },
+      "enabled": {
+        "name": "Zapnuté"
+      }
+    },
+    "text": {
+      "debug_input": {
+        "name": "Ladiaci vstup"
+      }
+    },
+    "sensor": {
+      "nozzle_status": {
+        "name": "Stav trysky",
+        "state": {
+          "unknown": "Neznámy",
+          "detached": "Odpojená",
+          "steam": "Para",
+          "milk_frother": "Spenic mlieka",
+          "milk_frother_cleaning": "Cistenie spenica",
+          "carafe_needs_cleaning": "Karafa vyžaduje čistenie",
+          "chocolate_container": "Nádoba na čokoládu",
+          "chocolate_container_needs_cleaning": "Nádoba na čokoládu vyžaduje čistenie"
+        }
+      },
+      "switches": {
+        "name": "Spinace",
+        "state": {
+          "none": "Ziadny",
+          "water_spout": "Vyvod vody",
+          "motor_up": "Motor hore",
+          "motor_down": "Motor dole",
+          "coffee_waste_container": "Nadoba na zvysky kavy",
+          "water_tank_absent": "Chybajuca nadrz na vodu",
+          "knob": "Otocny gombik",
+          "water_level_low": "Nizka hladina vody",
+          "coffee_jug": "Kanvica na kavu",
+          "ifd_caraffe": "Karafa na mlieko",
+          "ciocco_tank": "Nadrz na cokoladu",
+          "clean_knob": "Cistenie gombika",
+          "door_opened": "Dvierka otvorene",
+          "preground_door_opened": "Dvierka predmletej kavy otvorene",
+          "unknown_switch": "Neznamy spinac"
+        }
+      },
+      "device_status": {
+        "name": "Stav stroja",
+        "state": {
+          "empty_water_tank": "Prázdna nádrž na vodu",
+          "coffee_waste_container_full": "Zásobník na kávovú usadeninu je plný",
+          "descale_alarm": "Alarm odvápnenia",
+          "replace_water_filter": "Vymeňte vodný filter",
+          "coffee_ground_too_fine": "Káva je namletá príliš jemne",
+          "coffee_beans_empty": "Chýbajú kávové zrná",
+          "machine_to_service": "Stroj vyžaduje servis",
+          "coffee_heater_probe_failure": "Chyba sondy ohrievača kávy",
+          "too_much_coffee": "Príliš veľa kávy",
+          "coffee_infuser_motor_not_working": "Motor infúzora kávy nefunguje",
+          "steamer_probe_failure": "Chyba sondy parníka",
+          "empty_drip_tray": "Vyprázdnite odkvapkávaciu misku",
+          "hydraulic_circuit_problem": "Problém s hydraulickým okruhom",
+          "tank_is_in_position": "Nádrž je na mieste",
+          "clean_knob": "Vyčistite gombík",
+          "coffee_beans_empty_two": "Chýbajú kávové zrná (sekundárne)",
+          "tank_too_full": "Nádrž je príliš plná",
+          "bean_hopper_absent": "Chýba zásobník na zrná",
+          "grid_presence": "Mriežka prítomná",
+          "infuser_sense": "Snímač infúzora",
+          "not_enough_coffee": "Nedostatok kávy",
+          "expansion_comm_prob": "Problém s komunikáciou expanzie",
+          "expansion_submodules_prob": "Problém so submodulmi expanzie",
+          "grinding_unit_1_problem": "Problém s mlecou jednotkou 1",
+          "grinding_unit_2_problem": "Problém s mlecou jednotkou 2",
+          "condense_fan_problem": "Problém s kondenzačným ventilátorom",
+          "clock_bt_comm_problem": "Problém s BT komunikáciou hodín",
+          "spi_comm_problem": "Problém s SPI komunikáciou",
+          "unknown_alarm": "Neznámy alarm",
+          "turned_off": "Vypnuté",
+          "heating": "Zohrievanie",
+          "washing": "Umývanie",
+          "ready": "Pripravený",
+          "brewing": "Príprava kávy",
+          "rinsing": "Oplachovanie",
+          "preparing": "Pripravuje sa",
+          "delivering_hot_water": "Dodáva sa horúca voda",
+          "cleaning_milk_spout": "Čistenie trysky na mlieko",
+          "descaling": "Odvápňovanie"
+        }
+      },
+      "total_coffee": {
+        "name": "Celkom káv"
+      },
+      "total_coffee_with_milk": {
+        "name": "Celkom káv s mliekom"
+      },
+      "total_water": {
+        "name": "Celkom vody"
+      },
+      "descaling_count": {
+        "name": "Počet odvápnení"
+      },
+      "milk_cleaning_count": {
+        "name": "Počet čistení mlieka"
+      },
+      "filter_replace_count": {
+        "name": "Počet výmen filtra"
+      },
+      "total_tea": {
+        "name": "Celkom čajov"
+      },
+      "total_choco": {
+        "name": "Celkom čokolád"
+      },
+      "total_cold_milk": {
+        "name": "Celkom nápojov so studeným mliekom"
+      },
+      "daily_coffee": {
+        "name": "Denná káva"
+      },
+      "weekly_coffee": {
+        "name": "Týždenná káva"
+      },
+      "daily_water": {
+        "name": "Denná voda"
+      },
+      "weekly_water": {
+        "name": "Týždenná voda"
+      },
+      "additional_coffee": {
+        "name": "Ďalšie kávy"
+      }
+    },
+    "image": {
+      "image": {
+        "name": "Obrázok"
+      }
+    }
+  },
+  "services": {
+    "make_beverage": {
+      "name": "Pripraviť nápoj",
+      "description": "Pripraviť nápoj zo zoznamu",
+      "fields": {
+        "beverage": {
+          "name": "Nápoj",
+          "description": "Napoj na pripravu"
+        },
+        "entity_id": {
+          "name": "ID entity",
+          "description": "ID entity kavovaru"
+        }
+      }
+    }
+  },
+  "selector": {
+    "beverage": {
+      "options": {
+        "none": "Žiadny",
+        "steam": "Para",
+        "long": "Long",
+        "coffee": "Káva",
+        "dopio": "Dopio",
+        "hot_water": "Horúca voda",
+        "espresso": "Espresso",
+        "americano": "Americano",
+        "espresso2": "Espresso 2"
+      }
+    }
+  }
+}

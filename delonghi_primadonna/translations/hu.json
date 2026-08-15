@@ -1,0 +1,231 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Az eszköz már konfigurálva van"
+    },
+    "error": {
+      "cannot_connect": "Nem sikerült csatlakozni",
+      "invalid_auth": "Érvénytelen hitelesítés",
+      "unknown": "Váratlan hiba"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "mac": "MAC",
+          "name": "Név",
+          "model": "Modell"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "profile": {
+        "name": "Profil"
+      },
+      "make_beverage": {
+        "name": "Ital"
+      },
+      "energy_save_mode": {
+        "name": "Kapcsolja ki utána"
+      },
+      "water_hardness": {
+        "name": "Vízkeménység"
+      },
+      "water_temperature": {
+        "name": "Vízhőmérséklet"
+      }
+    },
+    "button": {
+      "power_on": {
+        "name": "Bekapcsol"
+      }
+    },
+    "switch": {
+      "cup_light": {
+        "name": "Csésze lámpa"
+      },
+      "debug_notification": {
+        "name": "Hibakeresési értesítés"
+      },
+      "energy_save_mode": {
+        "name": "Energiamegtakarítás mód"
+      },
+      "sounds": {
+        "name": "Hangok"
+      },
+      "time_sync": {
+        "name": "Idő szinkronizálása"
+      }
+    },
+    "binary_sensor": {
+      "descaling": {
+        "name": "Vízkőmentesítés"
+      },
+      "filter": {
+        "name": "Szűrő"
+      },
+      "enabled": {
+        "name": "Engedélyezve"
+      }
+    },
+    "text": {
+      "debug_input": {
+        "name": "Hibakeresési bemenet"
+      }
+    },
+    "sensor": {
+      "nozzle_status": {
+        "name": "Fúvóka állapota",
+        "state": {
+          "unknown": "Ismeretlen",
+          "detached": "Leválasztva",
+          "steam": "Gőz",
+          "milk_frother": "Tejhabosító",
+          "milk_frother_cleaning": "Tejhabosító tisztítás",
+          "carafe_needs_cleaning": "Kancsó tisztítása szükséges",
+          "chocolate_container": "Csokoládé tartály",
+          "chocolate_container_needs_cleaning": "Csokoládé tartály tisztítása szükséges"
+        }
+      },
+      "switches": {
+        "name": "Kapcsolók",
+        "state": {
+          "none": "Nincs",
+          "water_spout": "Vízkifolyó",
+          "motor_up": "Motor fel",
+          "motor_down": "Motor le",
+          "coffee_waste_container": "Kávézacc tartály",
+          "water_tank_absent": "Víztartály hiányzik",
+          "knob": "Gomb",
+          "water_level_low": "Alacsony vízszint",
+          "coffee_jug": "Kávés kancsó",
+          "ifd_caraffe": "Tejes kancsó",
+          "ciocco_tank": "Csokoládétartály",
+          "clean_knob": "Tisztító gomb",
+          "door_opened": "Ajtó nyitva",
+          "preground_door_opened": "Őrölt kávé nyílás nyitva",
+          "unknown_switch": "Unknown switch"
+        }
+      },
+      "device_status": {
+        "name": "Gép állapota",
+        "state": {
+          "empty_water_tank": "Üres víztartály",
+          "coffee_waste_container_full": "Kávézacc tartály tele",
+          "descale_alarm": "Vízkőtelenítés riasztás",
+          "replace_water_filter": "Vízszűrő cseréje",
+          "coffee_ground_too_fine": "Túl finom őrlemény",
+          "coffee_beans_empty": "Kávébab tartály üres",
+          "machine_to_service": "Szerviz szükséges",
+          "coffee_heater_probe_failure": "Kávéfűtő szonda hiba",
+          "too_much_coffee": "Túl sok kávé",
+          "coffee_infuser_motor_not_working": "Infúziós motor hiba",
+          "steamer_probe_failure": "Gőzölő szonda hiba",
+          "empty_drip_tray": "Ürítse ki a csepptálcát",
+          "hydraulic_circuit_problem": "Hidraulikus kör hiba",
+          "tank_is_in_position": "Tartály a helyén",
+          "clean_knob": "Tisztító gomb",
+          "coffee_beans_empty_two": "Másodlagos kávébab tartály üres",
+          "tank_too_full": "Tartály túl tele",
+          "bean_hopper_absent": "Babtartály hiányzik",
+          "grid_presence": "Rács jelenléte",
+          "infuser_sense": "Infúziós érzékelő",
+          "not_enough_coffee": "Nincs elég kávé",
+          "expansion_comm_prob": "Bővítő komm. hiba",
+          "expansion_submodules_prob": "Bővítő almodul hiba",
+          "grinding_unit_1_problem": "1. daráló hiba",
+          "grinding_unit_2_problem": "2. daráló hiba",
+          "condense_fan_problem": "Kondenzátor ventilátor hiba",
+          "clock_bt_comm_problem": "Óra BT komm. hiba",
+          "spi_comm_problem": "SPI komm. hiba",
+          "unknown_alarm": "Ismeretlen riasztás",
+          "ignore_alarm": "Riasztás figyelmen kívül hagyása",
+          "turned_off": "Kikapcsolva",
+          "heating": "Fűtés",
+          "washing": "Mosás",
+          "ready": "Kész",
+          "brewing": "Főzés",
+          "rinsing": "Öblítés",
+          "preparing": "Előkészítés",
+          "delivering_hot_water": "Forró víz adagolása",
+          "cleaning_milk_spout": "Tejkifolyó tisztítása",
+          "descaling": "Vízkőtelenítés"
+        }
+      },
+      "total_coffee": {
+        "name": "Összes kávé"
+      },
+      "total_coffee_with_milk": {
+        "name": "Összes tejes kávé"
+      },
+      "total_water": {
+        "name": "Összes víz"
+      },
+      "descaling_count": {
+        "name": "Vízkőtelenítések száma"
+      },
+      "milk_cleaning_count": {
+        "name": "Tejtisztítások száma"
+      },
+      "filter_replace_count": {
+        "name": "Szűrőcserék száma"
+      },
+      "total_tea": {
+        "name": "Összes tea"
+      },
+      "total_choco": {
+        "name": "Összes csokoládé"
+      },
+      "total_cold_milk": {
+        "name": "Összes hideg tej"
+      },
+      "daily_coffee": {
+        "name": "Napi kávé"
+      },
+      "weekly_coffee": {
+        "name": "Heti kávé"
+      },
+      "daily_water": {
+        "name": "Napi víz"
+      },
+      "weekly_water": {
+        "name": "Heti víz"
+      },
+      "additional_coffee": {
+        "name": "Kiegészítő kávé"
+      }
+    }
+  },
+  "services": {
+    "make_beverage": {
+      "name": "Italt készít",
+      "description": "Készítsen italt az alábbi listából",
+      "fields": {
+        "beverage": {
+          "name": "Ital",
+          "description": "Ital az előkészítéshez"
+        },
+        "entity_id": {
+          "name": "Entitás azonosító",
+          "description": "A kávéfőző entitás azonosítója"
+        }
+      }
+    }
+  },
+  "selector": {
+    "beverage": {
+      "options": {
+        "none": "Nincs",
+        "steam": "Gőz",
+        "long": "Hosszú",
+        "coffee": "Kávé",
+        "dopio": "Dupla",
+        "hot_water": "Forró víz",
+        "espresso": "Eszpresszó",
+        "americano": "Amerikai",
+        "espresso2": "Espresso 2"
+      }
+    }
+  }
+}

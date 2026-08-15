@@ -1,0 +1,230 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Gerät ist bereits konfiguriert"
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen",
+      "invalid_auth": "Ungültige Authentifizierung",
+      "unknown": "Unerwarteter Fehler"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "mac": "MAC",
+          "name": "Name",
+          "model": "Modell"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "profile": {
+        "name": "Profil"
+      },
+      "make_beverage": {
+        "name": "Getränk"
+      },
+      "energy_save_mode": {
+        "name": "Danach ausschalten"
+      },
+      "water_hardness": {
+        "name": "Wasserhärte"
+      },
+      "water_temperature": {
+        "name": "Wassertemperatur"
+      }
+    },
+    "button": {
+      "power_on": {
+        "name": "Sich einschalten"
+      }
+    },
+    "switch": {
+      "cup_light": {
+        "name": "Tasse Licht"
+      },
+      "debug_notification": {
+        "name": "Debugg-Benachrichtigung"
+      },
+      "energy_save_mode": {
+        "name": "Energiesparmodus"
+      },
+      "sounds": {
+        "name": "Geräusche"
+      },
+      "time_sync": {
+        "name": "Zeitsynchronisation"
+      }
+    },
+    "binary_sensor": {
+      "descaling": {
+        "name": "Entkalkung"
+      },
+      "filter": {
+        "name": "Filter"
+      },
+      "enabled": {
+        "name": "Aktiviert"
+      }
+    },
+    "text": {
+      "debug_input": {
+        "name": "Debug-Eingabe"
+      }
+    },
+    "sensor": {
+      "nozzle_status": {
+        "name": "Düsenzustand",
+        "state": {
+          "unknown": "Unbekannt",
+          "detached": "Abgenommen",
+          "steam": "Dampf",
+          "milk_frother": "Milchaufschäumer",
+          "milk_frother_cleaning": "Milchaufschäumer Reinigung",
+          "carafe_needs_cleaning": "Karaffe muss gereinigt werden",
+          "chocolate_container": "Schokoladenbehälter",
+          "chocolate_container_needs_cleaning": "Schokoladenbehälter muss gereinigt werden"
+        }
+      },
+      "switches": {
+        "name": "Schalter",
+        "state": {
+          "none": "Keine",
+          "water_spout": "Wasserauslauf",
+          "motor_up": "Motor hoch",
+          "motor_down": "Motor runter",
+          "coffee_waste_container": "Kaffeesatzbehälter",
+          "water_tank_absent": "Wassertank fehlt",
+          "knob": "Knopf",
+          "water_level_low": "Wasserstand niedrig",
+          "coffee_jug": "Kaffeekanne",
+          "ifd_caraffe": "Milchkaraffe",
+          "ciocco_tank": "Schokoladentank",
+          "clean_knob": "Reinigungsknopf",
+          "door_opened": "Tür geöffnet",
+          "preground_door_opened": "Fach für gemahlenen Kaffee geöffnet",
+          "unknown_switch": "Unbekannter Schalter"
+        }
+      },
+      "device_status": {
+        "name": "Gerätestatus",
+        "state": {
+          "empty_water_tank": "Wassertank leer",
+          "coffee_waste_container_full": "Kaffeesatzbehälter voll",
+          "descale_alarm": "Entkalkungsalarm",
+          "replace_water_filter": "Wasserfilter ersetzen",
+          "coffee_ground_too_fine": "Kaffeemahlung zu fein",
+          "coffee_beans_empty": "Kaffeebohnen leer",
+          "machine_to_service": "Maschine warten",
+          "coffee_heater_probe_failure": "Fehler Kaffeekopfheizungssensor",
+          "too_much_coffee": "Zu viel Kaffee",
+          "coffee_infuser_motor_not_working": "Infusormotor defekt",
+          "steamer_probe_failure": "Fehler Dampfsensor",
+          "empty_drip_tray": "Abtropfschale leeren",
+          "hydraulic_circuit_problem": "Problem Wasserkreislauf",
+          "tank_is_in_position": "Tank ist in Position",
+          "clean_knob": "Knopf reinigen",
+          "coffee_beans_empty_two": "Kaffeebohnen 2 leer",
+          "tank_too_full": "Tank zu voll",
+          "bean_hopper_absent": "Bohnenbehälter fehlt",
+          "grid_presence": "Gitter vorhanden",
+          "infuser_sense": "Infusor-Sensor",
+          "not_enough_coffee": "Nicht genug Kaffee",
+          "expansion_comm_prob": "Expansions-Kommunikationsproblem",
+          "expansion_submodules_prob": "Expansions-Submodul-Problem",
+          "grinding_unit_1_problem": "Problem Mahlwerk 1",
+          "grinding_unit_2_problem": "Problem Mahlwerk 2",
+          "condense_fan_problem": "Problem Kondensatorlüfter",
+          "clock_bt_comm_problem": "Uhr/BT-Kommunikationsproblem",
+          "spi_comm_problem": "SPI-Kommunikationsproblem",
+          "unknown_alarm": "Unbekannter Alarm",
+          "turned_off": "Ausgeschaltet",
+          "heating": "Aufheizen",
+          "washing": "Waschen",
+          "ready": "Bereit",
+          "brewing": "Zubereitung",
+          "rinsing": "Spülen",
+          "preparing": "Vorbereitung",
+          "delivering_hot_water": "Heißwasserausgabe",
+          "cleaning_milk_spout": "Milchauslauf reinigen",
+          "descaling": "Entkalken"
+        }
+      },
+      "total_coffee": {
+        "name": "Kaffee insgesamt"
+      },
+      "total_coffee_with_milk": {
+        "name": "Kaffee mit Milch insgesamt"
+      },
+      "total_water": {
+        "name": "Wasser insgesamt"
+      },
+      "descaling_count": {
+        "name": "Anzahl Entkalkungen"
+      },
+      "milk_cleaning_count": {
+        "name": "Anzahl Milchreinigung"
+      },
+      "filter_replace_count": {
+        "name": "Filterwechsel"
+      },
+      "total_tea": {
+        "name": "Tee insgesamt"
+      },
+      "total_choco": {
+        "name": "Schokolade insgesamt"
+      },
+      "total_cold_milk": {
+        "name": "Kaltmilch insgesamt"
+      },
+      "daily_coffee": {
+        "name": "Täglicher Kaffee"
+      },
+      "weekly_coffee": {
+        "name": "Wöchentlicher Kaffee"
+      },
+      "daily_water": {
+        "name": "Tägliches Wasser"
+      },
+      "weekly_water": {
+        "name": "Wöchentliches Wasser"
+      },
+      "additional_coffee": {
+        "name": "Zusätzlicher Kaffee"
+      }
+    }
+  },
+  "services": {
+    "make_beverage": {
+      "name": "Getränk machen",
+      "description": "Bereiten Sie ein Getränk aus der folgenden Liste vor",
+      "fields": {
+        "beverage": {
+          "name": "Getränk",
+          "description": "Getränk zur Vorbereitung"
+        },
+        "entity_id": {
+          "name": "Entity ID",
+          "description": "Entitäts-ID der Kaffeemaschine"
+        }
+      }
+    }
+  },
+  "selector": {
+    "beverage": {
+      "options": {
+        "none": "Keiner",
+        "steam": "Dampf",
+        "long": "Lang",
+        "coffee": "Kaffee",
+        "dopio": "Doppelt",
+        "hot_water": "Heißwasser",
+        "espresso": "Espresso",
+        "americano": "Americano",
+        "espresso2": "Espresso 2"
+      }
+    }
+  }
+}
