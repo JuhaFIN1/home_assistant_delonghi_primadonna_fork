@@ -58,6 +58,18 @@ START_BYTE = 0xD0
 MIN_BACKOFF = 30
 MAX_BACKOFF = 900
 
+# How long a user initiated command waits for the machine to advertise.
+# A machine in standby advertises infrequently, so a single point-in-time
+# presence check is not enough to decide it is unreachable.
+DISCOVERY_TIMEOUT = 25
+
+# Safety net: even though we subscribe to advertisements, probe for the
+# machine occasionally so a missed callback can never leave the
+# integration permanently asleep. Kept under Home Assistant's 10s entity
+# update warning threshold.
+PROBE_INTERVAL = 600
+PROBE_TIMEOUT = 8
+
 
 class DeviceNotPresent(BleakError):
     """Raised when the machine is not advertising.
@@ -327,6 +339,7 @@ class DelongiPrimadonna:
         self._backoff = MIN_BACKOFF
         self._retry_after = 0.0
         self._failure_logged = False
+        self._next_probe = 0.0
         self.statistics: dict[int, int | float] = {}
         self._last_stats_request = 0.0
         self._stats_lock = asyncio.Lock()
@@ -423,7 +436,17 @@ class DelongiPrimadonna:
 
     @callback
     def _async_on_unavailable(self, _service_info) -> None:
-        """Handle the machine no longer being advertised."""
+        """Handle the machine no longer being advertised.
+
+        A BLE peripheral normally stops advertising while it is in a
+        connection, so this callback fires during perfectly healthy
+        sessions. Only treat it as a loss when the link is actually down.
+        """
+        if self._client is not None and self._client.is_connected:
+            _LOGGER.debug(
+                '%s stopped advertising but the connection is up', self.mac
+            )
+            return
         if self._present:
             _LOGGER.info('%s went out of range', self.name)
         self._present = False
@@ -455,6 +478,35 @@ class DelongiPrimadonna:
             _LOGGER.info('%s went out of range', self.name)
         self._present = present
         return present
+
+    async def _async_wait_for_device(
+        self, timeout: int = DISCOVERY_TIMEOUT
+    ) -> bool:
+        """Wait for the machine to advertise, requesting an active scan.
+
+        A machine in standby can advertise only every few seconds, and the
+        Bluetooth stack drops it from its history in between. Asking once
+        and giving up would make the power-on button unreliable, so wait
+        for a real advertisement instead.
+        """
+        _LOGGER.debug(
+            'Waiting up to %ss for an advertisement from %s',
+            timeout,
+            self.mac,
+        )
+        try:
+            await bluetooth.async_process_advertisements(
+                self._hass,
+                lambda service_info: True,
+                {'address': self.mac.upper(), 'connectable': True},
+                bluetooth.BluetoothScanningMode.ACTIVE,
+                timeout,
+            )
+        except asyncio.TimeoutError:
+            return False
+        self._present = True
+        self._reset_backoff()
+        return True
 
     def _reset_backoff(self) -> None:
         self._backoff = MIN_BACKOFF
@@ -497,10 +549,27 @@ class DelongiPrimadonna:
         """
         if not self._address_present():
             self.connected = False
+            await self._async_probe_if_due()
             return
         if time.monotonic() < self._retry_after:
             return
         await self.get_device_name()
+
+    async def _async_probe_if_due(self) -> None:
+        """Occasionally listen for the machine even when it looks absent.
+
+        Advertisement callbacks are the primary wake-up path. This is the
+        backstop: if one is ever missed, the integration would otherwise
+        stay asleep until Home Assistant restarts. Logs at debug only, so
+        it does not bring back the log spam.
+        """
+        now = time.monotonic()
+        if now < self._next_probe:
+            return
+        self._next_probe = now + PROBE_INTERVAL
+        if await self._async_wait_for_device(PROBE_TIMEOUT):
+            _LOGGER.debug('Probe found %s, reconnecting', self.mac)
+            await self.get_device_name()
 
     @callback
     def _async_disconnected(self, _client) -> None:
@@ -957,15 +1026,34 @@ class DelongiPrimadonna:
         message = [int(x, 16) for x in command.split(' ')]
         await self.send_command(message)
 
-    async def send_command(self, message, retries=3):
+    async def send_command(self, message, retries=3, wait_for_device=True):
+        """Send a command, waking the machine up if necessary.
+
+        ``wait_for_device`` is True for anything a person triggered: those
+        commands are rare and must not fail just because the machine
+        happened to be between advertisements. Background polling passes
+        False so it never blocks.
+        """
         if not self._address_present():
-            # Nothing to talk to. One debug line beats three warnings and
-            # an error every time somebody presses a button.
-            _LOGGER.debug(
-                'Skipping command, %s is not in range', self.name
-            )
-            self.connected = False
-            return
+            if not wait_for_device:
+                _LOGGER.debug(
+                    'Skipping background command, %s is not in range',
+                    self.name,
+                )
+                self.connected = False
+                return
+            if not await self._async_wait_for_device():
+                # A command a person asked for must never fail silently.
+                _LOGGER.warning(
+                    'Cannot send command to %s: no Bluetooth advertisement '
+                    'within %ss. The machine is switched off at the mains, '
+                    'out of range of the proxy, or already connected to '
+                    'the De\'Longhi app (it accepts only one connection).',
+                    self.name,
+                    DISCOVERY_TIMEOUT,
+                )
+                self.connected = False
+                return
         async with self._lock:
             message_to_send = copy.deepcopy(message)
             for attempt in range(retries):
@@ -1001,6 +1089,11 @@ class DelongiPrimadonna:
                     return
                 except DeviceNotPresent:
                     self.connected = False
+                    if wait_for_device:
+                        _LOGGER.warning(
+                            '%s stopped advertising while the command was '
+                            'being sent', self.name
+                        )
                     return
                 except BleakError as error:
                     self.connected = False
@@ -1108,4 +1201,5 @@ class DelongiPrimadonna:
         message[5] = start_index & 0xFF
         message[6] = count
 
-        await self.send_command(message)
+        # Background polling: never block waiting for an advertisement.
+        await self.send_command(message, wait_for_device=False)
