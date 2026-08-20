@@ -470,7 +470,15 @@ class DelongiPrimadonna:
         return self._present
 
     def _address_present(self) -> bool:
-        """Ask the Bluetooth stack whether the machine is advertising."""
+        """Ask the Bluetooth stack whether the machine is advertising.
+
+        A held-open GATT link makes the machine stop advertising, same as
+        in ``_async_on_unavailable``, so an active connection counts as
+        present without asking the advertisement history.
+        """
+        if self._client is not None and self._client.is_connected:
+            self._present = True
+            return True
         present = bluetooth.async_address_present(
             self._hass, self.mac, connectable=True
         )
