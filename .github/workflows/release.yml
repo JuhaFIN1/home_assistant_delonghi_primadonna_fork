@@ -17,7 +17,7 @@ jobs:
           run: |
               echo ::set-output name=version::$(cat custom_components/delonghi_primadonna/manifest.json | jq -r '.version')
         - name: Create Release
-          uses: marvinpinto/action-automatic-releases@latest
+          uses: marvinpinto/action-automatic-releases@d68defdd11f9dcc7f52f35c1b7c236ee7513bcc1 # latest
           with:
               repo_token: ${{ secrets.GITHUB_TOKEN }}
               title: ${{ github.ref == 'refs/heads/develop' && 'Test release' || 'Release' }} ${{ steps.get_version.outputs.version }}${{ github.ref == 'refs/heads/develop' && '-beta' || '' }}
