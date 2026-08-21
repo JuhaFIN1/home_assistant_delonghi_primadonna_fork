@@ -3,6 +3,8 @@ from homeassistant.const import EntityCategory
 
 DOMAIN = 'delonghi_primadonna'
 
+DEFAULT_DEVICE_NAME = 'DeLonghi PrimaDonna'
+
 BEVERAGE_NONE = 'none'
 
 SERVICE = '00035b03-58e6-07dd-021a-08123a000300'

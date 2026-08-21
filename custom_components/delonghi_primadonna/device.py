@@ -30,7 +30,7 @@ from .const import (AMERICANO_OFF, AMERICANO_ON, AVAILABLE_PROFILES,
                     COFFEE_GROUNDS_CONTAINER_CLEAN,
                     COFFEE_GROUNDS_CONTAINER_DETACHED,
                     COFFEE_GROUNDS_CONTAINER_FULL, CONTROLL_CHARACTERISTIC,
-                    DEBUG, DEFAULT_IMAGE_URL, DEVICE_READY, DEVICE_STATUS,
+                    DEBUG, DEFAULT_DEVICE_NAME, DEFAULT_IMAGE_URL, DEVICE_READY, DEVICE_STATUS,
                     DEVICE_TURNOFF, DOMAIN, DOPPIO_OFF, DOPPIO_ON,
                     ESPRESSO2_OFF, ESPRESSO2_ON, ESPRESSO_OFF, ESPRESSO_ON,
                     HOTWATER_OFF, HOTWATER_ON, LONG_OFF, LONG_ON,
@@ -712,11 +712,15 @@ class DelongiPrimadonna:
         async with self._lock:
             try:
                 await self._connect()
-                self.hostname = bytes(
-                    await self._client.read_gatt_char(
-                        uuid.UUID(NAME_CHARACTERISTIC)
-                    )
-                ).decode('utf-8')
+                try:
+                    self.hostname = bytes(
+                        await self._client.read_gatt_char(
+                            uuid.UUID(NAME_CHARACTERISTIC)
+                        )
+                    ).decode('utf-8')
+                except BleakError as error:
+                    _LOGGER.debug('Could not read NAME_CHARACTERISTIC: %s', error)
+                    self.hostname = self.name or DEFAULT_DEVICE_NAME
                 await self._client.write_gatt_char(
                     uuid.UUID(CONTROLL_CHARACTERISTIC), bytearray(DEBUG)
                 )
