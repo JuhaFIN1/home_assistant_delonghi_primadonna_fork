@@ -1,6 +1,6 @@
 {
   "name": "DeLonghi BLE",
   "render_readme": true,
-  "homeassistant": "2023.1.1",
+  "homeassistant": "2023.7.0",
   "hide_default_branch": true
 }

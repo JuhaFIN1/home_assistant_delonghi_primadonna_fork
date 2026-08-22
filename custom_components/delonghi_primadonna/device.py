@@ -39,13 +39,13 @@ from .const import (AMERICANO_OFF, AMERICANO_ON, AVAILABLE_PROFILES,
                     COFFEE_GROUNDS_CONTAINER_CLEAN,
                     COFFEE_GROUNDS_CONTAINER_DETACHED,
                     COFFEE_GROUNDS_CONTAINER_FULL, CONTROLL_CHARACTERISTIC,
-                    DEBUG, DEFAULT_IMAGE_URL, DEVICE_READY, DEVICE_STATUS,
-                    DEVICE_TURNOFF, DOMAIN, DOPPIO_OFF, DOPPIO_ON,
-                    ESPRESSO2_OFF, ESPRESSO2_ON, ESPRESSO_OFF, ESPRESSO_ON,
-                    HOTWATER_OFF, HOTWATER_ON, LONG_OFF, LONG_ON,
-                    MACHINE_STATUS, NAME_CHARACTERISTIC, NOZZLE_STATE,
-                    START_COFFEE, STEAM_OFF, STEAM_ON, WATER_SHORTAGE,
-                    WATER_TANK_DETACHED)
+                    DEBUG, DEFAULT_DEVICE_NAME, DEFAULT_IMAGE_URL,
+                    DEVICE_READY, DEVICE_STATUS, DEVICE_TURNOFF, DOMAIN,
+                    DOPPIO_OFF, DOPPIO_ON, ESPRESSO2_OFF, ESPRESSO2_ON,
+                    ESPRESSO_OFF, ESPRESSO_ON, HOTWATER_OFF, HOTWATER_ON,
+                    LONG_OFF, LONG_ON, MACHINE_STATUS, NAME_CHARACTERISTIC,
+                    NOZZLE_STATE, START_COFFEE, STEAM_OFF, STEAM_ON,
+                    WATER_SHORTAGE, WATER_TANK_DETACHED)
 from .machine_switch import MachineSwitch, parse_switches
 from .model import get_machine_model
 
@@ -343,6 +343,7 @@ class DelongiPrimadonna:
         self.statistics: dict[int, int | float] = {}
         self._last_stats_request = 0.0
         self._stats_lock = asyncio.Lock()
+        self._statistics_task: asyncio.Task | None = None
         machine = get_machine_model(self.product_code)
         self.model = (
             machine.name if machine and machine.name else 'Prima Donna'
@@ -432,6 +433,7 @@ class DelongiPrimadonna:
             if unsub is not None:
                 unsub()
                 setattr(self, unsub_name, None)
+        await self.cancel_statistics_update()
         await self.disconnect()
 
     @callback
@@ -961,11 +963,17 @@ class DelongiPrimadonna:
         async with self._lock:
             try:
                 await self._connect()
-                self.hostname = bytes(
-                    await self._client.read_gatt_char(
-                        uuid.UUID(NAME_CHARACTERISTIC)
+                try:
+                    self.hostname = bytes(
+                        await self._client.read_gatt_char(
+                            uuid.UUID(NAME_CHARACTERISTIC)
+                        )
+                    ).decode('utf-8')
+                except BleakError as error:
+                    _LOGGER.debug(
+                        'Could not read NAME_CHARACTERISTIC: %s', error
                     )
-                ).decode('utf-8')
+                    self.hostname = self.name or DEFAULT_DEVICE_NAME
                 await self._client.write_gatt_char(
                     uuid.UUID(CONTROLL_CHARACTERISTIC), bytearray(DEBUG)
                 )
@@ -1085,10 +1093,7 @@ class DelongiPrimadonna:
                             timeout=10,
                         )
                     except asyncio.TimeoutError:
-                        # The machine ignores some commands depending on its
-                        # current state. Debug, not warning: statistics polls
-                        # send five commands at a time.
-                        _LOGGER.debug(
+                        _LOGGER.warning(
                             'Timeout waiting for response to command: %s',
                             hexlify(bytearray(message_to_send), " ")
                         )
@@ -1166,6 +1171,40 @@ class DelongiPrimadonna:
         if 106 in self.statistics:
             water_ml = self.statistics.get(106, 0)
             self.statistics[10106] = round(water_ml / 2000.0, 2)
+
+    def schedule_statistics_update(self) -> None:
+        """Schedule a statistics refresh as a single tracked background task.
+
+        Deduplicates: a request while one is already in flight is a no-op,
+        so entities polling concurrently don't stack one task each.
+        """
+        task = self._statistics_task
+        if task is not None and not task.done():
+            return
+        self._statistics_task = self._hass.async_create_background_task(
+            self._run_statistics_update(), "delonghi statistics update",
+        )
+
+    async def _run_statistics_update(self) -> None:
+        """Run update_statistics(), logging unexpected failures."""
+        try:
+            await self.update_statistics()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOGGER.exception("Statistics update failed")
+
+    async def cancel_statistics_update(self) -> None:
+        """Cancel and wait for a pending statistics update, if any."""
+        task = self._statistics_task
+        self._statistics_task = None
+        if task is None or task.done():
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     async def update_statistics(self) -> None:
         """Update statistics with throttling."""

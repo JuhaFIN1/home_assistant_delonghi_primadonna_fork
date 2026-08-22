@@ -10,12 +10,12 @@ jobs:
     steps:
       - uses: "actions/checkout@v7"
       
-      - uses: "hacs/action@main"
+      - uses: "hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa" # main
         name: HACS validation
         with:
           category: "integration"
 
-      - uses: "home-assistant/actions/hassfest@master"
+      - uses: "home-assistant/actions/hassfest@a7c616ce81ccda50150bf1595786c71b1883fabb" # master
           
   lint:
     name: Lint
@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.10"
 
@@ -31,7 +31,7 @@ jobs:
         run: pip install -r requirements_dev.txt
 
       - name: Flake8 lint
-        uses: TrueBrain/actions-flake8@v2
+        uses: TrueBrain/actions-flake8@36ab8db923b9a63cfd4b87840ca2f94c117bb50e # v2
         with:
           path: custom_components
 

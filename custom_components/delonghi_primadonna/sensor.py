@@ -83,7 +83,7 @@ async def async_setup_entry(
         ]
     )
 
-    hass.async_create_task(delongh_device.update_statistics())
+    delongh_device.schedule_statistics_update()
     return True
 
 
@@ -248,10 +248,11 @@ class DelongiPrimadonnaStatisticsSensor(
     async def async_update(self) -> None:
         """Fetch new state data for the sensor."""
         if self.device.connected and self.device.available:
-            # update_statistics() throttles itself to once a minute; awaiting
-            # it avoids stacking one background task per statistics sensor
-            # on every poll cycle.
-            await self.device.update_statistics()
+            # A single tracked background task services every statistics
+            # sensor's poll; schedule_statistics_update() is a no-op while
+            # one is already in flight, and update_statistics() itself
+            # throttles to once a minute.
+            self.device.schedule_statistics_update()
 
 
 class DelongiPrimadonnaUtilitySensor(DelongiPrimadonnaStatisticsSensor):
