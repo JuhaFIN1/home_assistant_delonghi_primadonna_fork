@@ -343,6 +343,7 @@ class DelongiPrimadonna:
         self.statistics: dict[int, int | float] = {}
         self._last_stats_request = 0.0
         self._stats_lock = asyncio.Lock()
+        self._statistics_task: asyncio.Task | None = None
         machine = get_machine_model(self.product_code)
         self.model = (
             machine.name if machine and machine.name else 'Prima Donna'
@@ -432,6 +433,7 @@ class DelongiPrimadonna:
             if unsub is not None:
                 unsub()
                 setattr(self, unsub_name, None)
+        await self.cancel_statistics_update()
         await self.disconnect()
 
     @callback
@@ -1091,10 +1093,7 @@ class DelongiPrimadonna:
                             timeout=10,
                         )
                     except asyncio.TimeoutError:
-                        # The machine ignores some commands depending on its
-                        # current state. Debug, not warning: statistics polls
-                        # send five commands at a time.
-                        _LOGGER.debug(
+                        _LOGGER.warning(
                             'Timeout waiting for response to command: %s',
                             hexlify(bytearray(message_to_send), " ")
                         )
@@ -1172,6 +1171,40 @@ class DelongiPrimadonna:
         if 106 in self.statistics:
             water_ml = self.statistics.get(106, 0)
             self.statistics[10106] = round(water_ml / 2000.0, 2)
+
+    def schedule_statistics_update(self) -> None:
+        """Schedule a statistics refresh as a single tracked background task.
+
+        Deduplicates: a request while one is already in flight is a no-op,
+        so entities polling concurrently don't stack one task each.
+        """
+        task = self._statistics_task
+        if task is not None and not task.done():
+            return
+        self._statistics_task = self._hass.async_create_background_task(
+            self._run_statistics_update(), "delonghi statistics update",
+        )
+
+    async def _run_statistics_update(self) -> None:
+        """Run update_statistics(), logging unexpected failures."""
+        try:
+            await self.update_statistics()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOGGER.exception("Statistics update failed")
+
+    async def cancel_statistics_update(self) -> None:
+        """Cancel and wait for a pending statistics update, if any."""
+        task = self._statistics_task
+        self._statistics_task = None
+        if task is None or task.done():
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     async def update_statistics(self) -> None:
         """Update statistics with throttling."""
