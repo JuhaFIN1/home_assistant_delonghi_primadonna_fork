@@ -56,9 +56,15 @@
       },
       "time_sync": {
         "name": "Zeitsynchronisation"
+      },
+      "power": {
+        "name": "Ein/Aus"
       }
     },
     "binary_sensor": {
+      "dispensing": {
+          "name": "Bezug läuft"
+      },
       "descaling": {
         "name": "Entkalkung"
       },
@@ -148,6 +154,8 @@
           "rinsing": "Spülen",
           "preparing": "Vorbereitung",
           "delivering_hot_water": "Heißwasserausgabe",
+          "delivering_steam": "Dampfausgabe",
+          "changing_filter": "Filterwechsel",
           "cleaning_milk_spout": "Milchauslauf reinigen",
           "descaling": "Entkalken"
         }

@@ -56,6 +56,9 @@
       },
       "time_sync": {
         "name": "Sincro ora"
+      },
+      "power": {
+        "name": "Power"
       }
     },
     "binary_sensor": {
@@ -149,6 +152,8 @@
           "rinsing": "Risciacquo",
           "preparing": "Preparazione",
           "delivering_hot_water": "Erogazione acqua calda",
+          "delivering_steam": "Erogazione vapore",
+          "changing_filter": "Sostituzione filtro",
           "cleaning_milk_spout": "Pulizia beccuccio latte",
           "descaling": "Decalcificazione"
         }

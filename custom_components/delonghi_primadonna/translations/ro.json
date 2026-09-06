@@ -56,6 +56,9 @@
       },
       "time_sync": {
         "name": "Sincronizare oră"
+      },
+      "power": {
+        "name": "Power"
       }
     },
     "binary_sensor": {
@@ -149,6 +152,8 @@
           "rinsing": "Clătire",
           "preparing": "Pregătire",
           "delivering_hot_water": "Distribuire apă fierbinte",
+          "delivering_steam": "Distribuire abur",
+          "changing_filter": "Schimbare filtru",
           "cleaning_milk_spout": "Curățare duză de lapte",
           "descaling": "Decalcifiere"
         }

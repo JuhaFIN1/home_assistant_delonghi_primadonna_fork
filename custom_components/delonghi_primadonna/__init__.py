@@ -36,9 +36,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.unique_id] = delonghi_device
     _LOGGER.debug('Device id %s', entry.unique_id)
     _LOGGER.debug("Device data %s", entry.data)
-    # Subscribe to advertisements instead of blindly connecting at startup.
-    # A machine that is switched off now costs nothing until it shows up.
+    # Subscribe to advertisements instead of only ever finding out the
+    # machine exists by trying to connect.
     await delonghi_device.async_start()
+    if hasattr(entry, "async_create_background_task"):
+        initialization_task = entry.async_create_background_task(
+            hass,
+            delonghi_device.get_device_name(),
+            "delonghi device initialization",
+        )
+    else:
+        initialization_task = hass.async_create_task(
+            delonghi_device.get_device_name()
+        )
+    delonghi_device.set_initialization_task(initialization_task)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     async def make_beverage(call: ServiceCall) -> None:
@@ -65,12 +77,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    delonghi_device = hass.data[DOMAIN][entry.unique_id]
+
+    await delonghi_device.cancel_initialization()
+
     unload_ok = await hass.config_entries.async_unload_platforms(
         entry, PLATFORMS
     )
     if unload_ok:
-        await hass.data[DOMAIN][entry.unique_id].async_stop()
+        await delonghi_device.async_stop()
+        await delonghi_device.cancel_statistics_update()
+        await delonghi_device.disconnect()
         hass.data[DOMAIN].pop(entry.unique_id)
+
     _LOGGER.debug('Unload %s', entry.unique_id)
     return unload_ok
 

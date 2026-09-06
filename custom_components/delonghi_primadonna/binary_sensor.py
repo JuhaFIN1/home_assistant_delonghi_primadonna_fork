@@ -26,27 +26,25 @@ async def async_setup_entry(
             DelongiPrimadonnaDescaleSensor(delongh_device, hass),
             DelongiPrimadonnaFilterSensor(delongh_device, hass),
             DelongiPrimadonnaEnabledSensor(delongh_device, hass),
+            DelongiPrimadonnaDispensingSensor(delongh_device, hass),
         ]
     )
     return True
 
 
 class DelongiPrimadonnaEnabledSensor(
-    DelonghiDeviceEntity, BinarySensorEntity, RestoreEntity
+    DelonghiDeviceEntity, BinarySensorEntity
 ):
-    """
-    Shows if the device up and running
+    """Shows whether the machine is out of standby.
+
+    Deliberately not a RestoreEntity: is_on reads the machine state, so
+    there is nothing of its own to restore, and writing a remembered value
+    back into the device made it claim a state no frame had reported.
     """
 
     _attr_device_class = BinarySensorDeviceClass.RUNNING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = 'enabled'
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        if (last_state := await self.async_get_last_state()) is not None:
-            self._attr_is_on = last_state.state == 'on'
-            self.device.switches.is_on = self._attr_is_on
 
     @property
     def icon(self) -> str:
@@ -128,3 +126,23 @@ class DelongiPrimadonnaFilterSensor(
         if self.is_on:
             result = 'mdi:filter-off'
         return result
+
+
+class DelongiPrimadonnaDispensingSensor(
+    DelonghiDeviceEntity, BinarySensorEntity
+):
+    """On while the machine is dispensing a beverage."""
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_translation_key = 'dispensing'
+    _attr_icon = 'mdi:coffee-to-go'
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while a beverage is being dispensed."""
+        return self.device.is_dispensing
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose the dispensing progress percentage."""
+        return {'percentage': self.device.dispensing_percentage}

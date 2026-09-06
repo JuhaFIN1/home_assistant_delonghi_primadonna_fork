@@ -58,36 +58,39 @@ NOZZLE_STATE = {
 # Skipable maintanence states
 SERVICE_STATE = {0: 'OK', 4: 'DESCALING'}
 
+# Alarm bit -> translation key. These are keys, not display text:
+# the matching entries already live in strings.json and
+# translations/*.json under entity.sensor.device_status.state.
 DEVICE_STATUS = {
-    0: "Empty water tank",
-    1: "Coffee waste container full",
-    2: "Descaling needed",
-    3: "Replace water filter",
-    4: "Coffee ground too fine",
-    5: "Coffee beans empty",
-    6: "Service required",
-    7: "Heater probe failure",
-    8: "Too much coffee",
-    9: "Infuser motor failure",
-    10: "Steamer probe failure",
-    11: "Empty drip tray",
-    12: "Hydraulic circuit problem",
-    13: "Tank in position",
-    14: "Clean knob",
-    15: "Coffee beans empty",
-    16: "Tank too full",
-    17: "Bean hopper absent",
-    18: "Grid present",
-    19: "Infuser sense",
-    20: "Not enough coffee",
-    21: "Expansion comm problem",
-    22: "Expansion submodule problem",
-    23: "Grinding unit 1 problem",
-    24: "Grinding unit 2 problem",
-    25: "Condenser fan problem",
-    26: "BT communication problem",
-    27: "SPI communication problem",
-    99: "Unknown alarm",
+    0: "empty_water_tank",
+    1: "coffee_waste_container_full",
+    2: "descale_alarm",
+    3: "replace_water_filter",
+    4: "coffee_ground_too_fine",
+    5: "coffee_beans_empty",
+    6: "machine_to_service",
+    7: "coffee_heater_probe_failure",
+    8: "too_much_coffee",
+    9: "coffee_infuser_motor_not_working",
+    10: "steamer_probe_failure",
+    11: "empty_drip_tray",
+    12: "hydraulic_circuit_problem",
+    13: "tank_is_in_position",
+    14: "clean_knob",
+    15: "coffee_beans_empty_two",
+    16: "tank_too_full",
+    17: "bean_hopper_absent",
+    18: "grid_presence",
+    19: "infuser_sense",
+    20: "not_enough_coffee",
+    21: "expansion_comm_prob",
+    22: "expansion_submodules_prob",
+    23: "grinding_unit_1_problem",
+    24: "grinding_unit_2_problem",
+    25: "condense_fan_problem",
+    26: "clock_bt_comm_problem",
+    27: "spi_comm_problem",
+    99: "unknown_alarm",
 }
 
 MACHINE_STATUS = {
@@ -95,21 +98,89 @@ MACHINE_STATUS = {
     1: "heating",
     2: "washing",
     3: "heating",
-    4: "heating",
-    5: "ready",  # Old / v1 Ready
+    # Measured on an ECAM 656.55.MS during a full descaling run, 2026-08-22.
+    # 4 is set as soon as the descaling program is armed and stays set while
+    # pumping, so it is the program state rather than "descaling right now".
+    4: "descaling",
+    # 96 s steam dispense with a full progress curve in byte 11. Mapping this
+    # to "ready" made the sensor report an idle machine while steam ran.
+    5: "delivering_steam",
     6: "brewing",
     7: "ready",  # v2 Ready
     8: "rinsing",
     10: "preparing",
     11: "delivering_hot_water",
     12: "cleaning_milk_spout",
-    14: "descaling",
+    # Rinse cycle after confirming a filter change. The machine treats this
+    # as its own program, not a phase of descaling.
+    14: "changing_filter",
 }
 
 """
 Command bytes
 """
+# Command type lives in byte 2. Used to name a command in log messages,
+# so a timeout says what failed instead of only dumping its bytes.
+COMMAND_NAMES = {
+    0x75: 'status poll',
+    0x83: 'beverage',
+    0x84: 'power',
+    0x90: 'write setting',
+    0x95: 'read setting',
+    0xA2: 'statistics',
+    0xA4: 'profile names',
+    0xA9: 'profile selection',
+    0xE2: 'clock',
+}
+
 BYTES_POWER = [0x0d, 0x07, 0x84, 0x0f, 0x02, 0x01, 0x55, 0x12]
+
+# AppControl (0x84) with (1, 1) puts the machine into standby. This is not
+# part of the observed app traffic; it was found by probing and confirmed on
+# the machines listed below. The switch is only offered for those, because
+# what (1, 1) does on an untested model is unknown.
+BYTES_POWER_OFF = [0x0d, 0x07, 0x84, 0x0f, 0x01, 0x01, 0x00, 0x00]
+
+# Machine families with at least one owner report of the standby command
+# working, from issue #222 where it was found. Each family rests on a
+# single such report - not every code below has been confirmed
+# individually. Sibling codes ride along only when MachinesModels.json
+# gives them the same `type` as the reported machine, which is the
+# catalog's own machine identifier; the display `name` is not enough,
+# since several distinct machines share one name.
+#
+# Standby is not universal: Dinamica PLUS 370.95 was reported in the same
+# thread as not responding to it. Hence an allow list, not a feature flag.
+STANDBY_VERIFIED_PRODUCT_CODES = (
+    # PrimaDonna ELITE 656.55 - these two came with the original switch in
+    # #253, whose author verified them. Their types do differ (ECAM 656.55
+    # protocol 2 and ECAM 656.55.MS protocol 1), so they are grandfathered
+    # on that author's report rather than by the type rule above.
+    '0132217031', '0132217027',
+    # PrimaDonna S 510.55 - reported by the author of #222. These five all
+    # carry type ECAM 510.55.M. A sixth entry, '0132215355', shares the
+    # display name but its type is ECAM516.45.MB, a different machine, so
+    # it is deliberately left out.
+    '0132215311', '0132215322', '0132215329',
+    '0132215331', '0132215339',
+    # PrimaDonna ELITE 650.85 - confirmed in #222 for an ECAM650.85.MS.
+    # MachinesModels.json also carries a '650.85.MS' entry under product
+    # code '71234567', which is plainly a placeholder rather than a real
+    # SKU, so it is left out until someone reports picking it and the
+    # switch working.
+    '0132219009', '0132219012', '0132219017', '0132219019',
+    # Maestosa / EPAM960.75.GLM - confirmed in #222. Eight entries carry a
+    # Maestosa name and the name field alone cannot tell them apart; the
+    # machine identity is only in each entry's image_url. Seven of the
+    # eight are EPAM960.75.GLM / MAESTOSA_BEST and these six are those,
+    # minus '0132268004' - which is the same machine identity but listed
+    # separately as MAESTOSA CN for the Chinese market, and is left out
+    # only because no report has come from that variant. The eighth,
+    # '0132267000' (MAESTOSA_GOOD), is an EPAM960.55.GM: a genuinely
+    # different machine that nobody has reported standby on.
+    '0132268000', '0132230018', 'J013200730',
+    '0132268001', '0132268002', '0132268003',
+)
 
 # Default bitmask for commands
 BASE_COMMAND = '10000001'
@@ -138,6 +209,19 @@ BYTES_WATER_TEMPERATURE_COMMAND = [
     0x0d, 0x0b, 0x90, 0x0f, 0x00, 0x3d,
     0x00, 0x00, 0x00, 0x00, 0x6f, 0x31
 ]
+
+# Reads a device parameter (0x95). Parameter 0x3f holds the settings
+# bitmask written by BYTES_SWITCH_COMMAND (see SWITCH_BIT_* below).
+PARAM_SWITCHES = 0x3F
+BYTES_LOAD_SWITCHES = [
+    0x0d, 0x08, 0x95, 0x0f, 0x00, 0x3f,
+    0x01, 0x00, 0x00
+]
+
+# Bit layout of the settings parameter 0x3f
+SWITCH_BIT_SOUNDS = 0x04
+SWITCH_BIT_CUP_LIGHT = 0x08
+SWITCH_BIT_ENERGY_SAVE = 0x10
 
 BYTES_STATISTICS_COMMAND = [
     0x0d, 0x08, 0xa2, 0x0f, 0x00, 0x64,

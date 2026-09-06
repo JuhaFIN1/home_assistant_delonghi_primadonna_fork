@@ -15,37 +15,32 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import IntFlag
 
-from bleak import BleakClient
 from bleak.exc import BleakDBusError, BleakError
+from bleak_retry_connector import (BleakClientWithServiceCache,
+                                   establish_connection)
 from homeassistant.components import bluetooth
 from homeassistant.const import CONF_MAC, CONF_MODEL, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 
-try:
-    from bleak_retry_connector import (BleakClientWithServiceCache,
-                                       establish_connection)
-    HAS_RETRY_CONNECTOR = True
-except ImportError:  # pragma: no cover - very old Home Assistant
-    BleakClientWithServiceCache = BleakClient
-    establish_connection = None
-    HAS_RETRY_CONNECTOR = False
-
 from .const import (AMERICANO_OFF, AMERICANO_ON, AVAILABLE_PROFILES,
                     BASE_COMMAND, BEVERAGE_NONE, BYTES_AUTOPOWEROFF_COMMAND,
-                    BYTES_LOAD_PROFILES, BYTES_POWER, BYTES_STATISTICS_COMMAND,
+                    BYTES_LOAD_PROFILES, BYTES_LOAD_SWITCHES, BYTES_POWER,
+                    BYTES_POWER_OFF, BYTES_STATISTICS_COMMAND,
                     BYTES_SWITCH_COMMAND, BYTES_TIME_COMMAND,
                     BYTES_WATER_HARDNESS_COMMAND,
                     BYTES_WATER_TEMPERATURE_COMMAND, COFFE_OFF, COFFE_ON,
                     COFFEE_GROUNDS_CONTAINER_CLEAN,
                     COFFEE_GROUNDS_CONTAINER_DETACHED,
-                    COFFEE_GROUNDS_CONTAINER_FULL, CONTROLL_CHARACTERISTIC,
-                    DEBUG, DEFAULT_DEVICE_NAME, DEFAULT_IMAGE_URL,
-                    DEVICE_READY, DEVICE_STATUS, DEVICE_TURNOFF, DOMAIN,
-                    DOPPIO_OFF, DOPPIO_ON, ESPRESSO2_OFF, ESPRESSO2_ON,
-                    ESPRESSO_OFF, ESPRESSO_ON, HOTWATER_OFF, HOTWATER_ON,
-                    LONG_OFF, LONG_ON, MACHINE_STATUS, NAME_CHARACTERISTIC,
-                    NOZZLE_STATE, START_COFFEE, STEAM_OFF, STEAM_ON,
-                    WATER_SHORTAGE, WATER_TANK_DETACHED)
+                    COFFEE_GROUNDS_CONTAINER_FULL, COMMAND_NAMES,
+                    CONTROLL_CHARACTERISTIC, DEBUG, DEFAULT_DEVICE_NAME,
+                    DEFAULT_IMAGE_URL, DEVICE_READY, DEVICE_STATUS,
+                    DEVICE_TURNOFF, DOMAIN, DOPPIO_OFF, DOPPIO_ON,
+                    ESPRESSO2_OFF, ESPRESSO2_ON, ESPRESSO_OFF, ESPRESSO_ON,
+                    HOTWATER_OFF, HOTWATER_ON, LONG_OFF, LONG_ON,
+                    MACHINE_STATUS, NAME_CHARACTERISTIC, NOZZLE_STATE,
+                    PARAM_SWITCHES, START_COFFEE, STEAM_OFF, STEAM_ON,
+                    SWITCH_BIT_CUP_LIGHT, SWITCH_BIT_ENERGY_SAVE,
+                    SWITCH_BIT_SOUNDS, WATER_SHORTAGE, WATER_TANK_DETACHED)
 from .machine_switch import MachineSwitch, parse_switches
 from .model import get_machine_model
 
@@ -72,10 +67,13 @@ PROBE_TIMEOUT = 8
 
 
 class DeviceNotPresent(BleakError):
-    """Raised when the machine is not advertising.
+    """Raised when the machine is not advertising, or is still within a
+    backoff window after a recent connection failure.
 
-    This is an expected, boring condition (machine switched off or out of
-    range) and must never be logged above debug level.
+    This is an expected, boring condition (machine switched off, out of
+    range, or already backing off) and must never be logged above debug
+    level - ``_note_failure`` already logged the one WARNING for the
+    streak.
     """
 
 
@@ -87,6 +85,14 @@ class MonitorData:
     status: int
     sub_status: int
     nozzle_state: int
+    percentage: int = 0
+
+
+def describe_command(message) -> str:
+    """Name a command for log messages, falling back to its type byte."""
+    if len(message) < 3:
+        return 'unknown'
+    return COMMAND_NAMES.get(message[2], f'0x{message[2]:02x}')
 
 
 def parse_monitor_data(data: bytes) -> MonitorData | None:
@@ -102,6 +108,7 @@ def parse_monitor_data(data: bytes) -> MonitorData | None:
     status = 0
     sub_status = 0
     nozzle_state = -1
+    percentage = 0
 
     if answer_id == 0x75:  # MonitorDataV2
         if len(data) < 14:
@@ -126,6 +133,10 @@ def parse_monitor_data(data: bytes) -> MonitorData | None:
 
         # Nozzle State: Byte 4 (from MonitorDataV2.a())
         nozzle_state = data[4]
+
+        # Dispensing progress: byte 11 carries the percentage
+        # (see longshot MonitorV2Response)
+        percentage = data[11]
 
     elif answer_id == 0x70:  # MonitorData (v1)
         if len(data) < 11:
@@ -157,7 +168,9 @@ def parse_monitor_data(data: bytes) -> MonitorData | None:
     else:
         return None
 
-    return MonitorData(switches, alarms, status, sub_status, nozzle_state)
+    return MonitorData(
+        switches, alarms, status, sub_status, nozzle_state, percentage
+    )
 
 
 class BeverageEntityFeature(IntFlag):
@@ -322,13 +335,17 @@ class DelongiPrimadonna:
         self.notify = False
         self.steam_nozzle = NOZZLE_STATE[-1]
         self.service = 0
-        self.status = "Ready"
+        self.status = 'ready'
         self.switches = DeviceSwitches()
         self.active_switches: list[MachineSwitch] = []
         self.sync_time = False
+        self.is_dispensing = False
+        self.dispensing_percentage = 0
+        self.last_time_sync = 0.0
         self._lock = asyncio.Lock()
         self._rx_buffer = bytearray()
         self._response_event = None
+        self._expected_statistics_start: int | None = None
         self._last_response: bytes | None = None
         # --- availability / backoff bookkeeping -------------------------
         # ``_present`` mirrors what the Bluetooth stack sees (advertising),
@@ -343,7 +360,10 @@ class DelongiPrimadonna:
         self.statistics: dict[int, int | float] = {}
         self._last_stats_request = 0.0
         self._stats_lock = asyncio.Lock()
+        self._switches_raw: int | None = None
+        self._last_switches_request = 0.0
         self._statistics_task: asyncio.Task | None = None
+        self._initialization_task: asyncio.Task | None = None
         machine = get_machine_model(self.product_code)
         self.model = (
             machine.name if machine and machine.name else 'Prima Donna'
@@ -399,9 +419,10 @@ class DelongiPrimadonna:
     async def async_start(self) -> None:
         """Start watching for the machine's advertisements.
 
-        Instead of polling a possibly absent device we let the Bluetooth
-        integration tell us when it shows up. A machine that is switched
-        off simply produces no callbacks, and therefore no log lines.
+        Instead of only ever finding out the machine exists by trying to
+        connect, subscribe to Bluetooth advertisements too: it lets the
+        stack tell us promptly when the machine appears or disappears,
+        and lets a fresh advertisement reset the backoff below.
         """
         self._present = bluetooth.async_address_present(
             self._hass, self.mac, connectable=True
@@ -423,18 +444,14 @@ class DelongiPrimadonna:
         _LOGGER.debug(
             'Watching %s, present at startup: %s', self.mac, self._present
         )
-        if self._present:
-            await self.async_refresh()
 
     async def async_stop(self) -> None:
-        """Stop watching and drop the connection."""
+        """Stop watching advertisements."""
         for unsub_name in ('_unsub_bluetooth', '_unsub_unavailable'):
             unsub = getattr(self, unsub_name)
             if unsub is not None:
                 unsub()
                 setattr(self, unsub_name, None)
-        await self.cancel_statistics_update()
-        await self.disconnect()
 
     @callback
     def _async_on_unavailable(self, _service_info) -> None:
@@ -464,7 +481,7 @@ class DelongiPrimadonna:
             # A fresh advertisement means a fresh start: forget the backoff
             # accumulated while the machine was away.
             self._reset_backoff()
-            self._hass.async_create_task(self.async_refresh())
+            self._hass.async_create_task(self.get_device_name())
 
     @property
     def available(self) -> bool:
@@ -526,9 +543,10 @@ class DelongiPrimadonna:
     def _note_failure(self, error: Exception) -> None:
         """Record a failed connection and widen the retry window."""
         if isinstance(error, DeviceNotPresent):
-            # Not a failure at all: the machine is simply off. The
-            # advertisement callback wakes us up when it returns.
-            _LOGGER.debug('%s is not advertising', self.mac)
+            # Not a failure at all: the machine is simply off, or we are
+            # already backing off from an earlier one. The advertisement
+            # callback (or the backoff timer) wakes us up in due course.
+            _LOGGER.debug('%s is not reachable right now', self.mac)
             return
         self._retry_after = time.monotonic() + self._backoff
         # Log the first failure of a streak at warning level so real
@@ -551,20 +569,6 @@ class DelongiPrimadonna:
             )
         self._backoff = min(self._backoff * 2, MAX_BACKOFF)
 
-    async def async_refresh(self) -> None:
-        """Refresh machine state, but only when that can possibly work.
-
-        This replaces the old behaviour where every entity poll produced a
-        connection attempt regardless of whether the machine existed.
-        """
-        if not self._address_present():
-            self.connected = False
-            await self._async_probe_if_due()
-            return
-        if time.monotonic() < self._retry_after:
-            return
-        await self.get_device_name()
-
     async def _async_probe_if_due(self) -> None:
         """Occasionally listen for the machine even when it looks absent.
 
@@ -581,16 +585,64 @@ class DelongiPrimadonna:
             _LOGGER.debug('Probe found %s, reconnecting', self.mac)
             await self.get_device_name()
 
-    @callback
-    def _async_disconnected(self, _client) -> None:
-        """Handle the machine dropping the GATT link."""
-        _LOGGER.debug('Disconnected from %s', self.mac)
-        self._client = None
-        self.connected = False
+    def set_initialization_task(self, task: asyncio.Task) -> None:
+        """Track the device initialization task."""
+        self._initialization_task = task
+
+    async def cancel_initialization(self) -> None:
+        """Cancel and wait for device initialization."""
+        task = self._initialization_task
+        self._initialization_task = None
+
+        if task is None or task.done():
+            return
+
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    def schedule_statistics_update(self) -> None:
+        """Schedule a statistics update when needed."""
+        task = self._statistics_task
+        if task is not None and not task.done():
+            return
+
+        if time.monotonic() - self._last_stats_request < 60:
+            return
+
+        self._statistics_task = self._hass.async_create_background_task(
+            self._run_statistics_update(),
+            "delonghi statistics update",
+        )
+
+    async def _run_statistics_update(self) -> None:
+        """Run a managed statistics update."""
+        try:
+            await self.update_statistics()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOGGER.exception("Statistics update failed")
+
+    async def cancel_statistics_update(self) -> None:
+        """Cancel and wait for a pending statistics update."""
+        task = self._statistics_task
+        self._statistics_task = None
+
+        if task is None or task.done():
+            return
+
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     async def disconnect(self):
         """Disconnect from the device."""
-        _LOGGER.debug("Disconnect from %s", self.mac)
+        _LOGGER.info("Disconnect from %s", self.mac)
         async with self._lock:
             client = self._client
             if client is not None and client.is_connected:
@@ -600,7 +652,7 @@ class DelongiPrimadonna:
                     asyncio.TimeoutError,
                     Exception,
                 ) as error:  # noqa: BLE001
-                    _LOGGER.debug(
+                    _LOGGER.warning(
                         "Forced disconnect [%s]: %s",
                         type(error).__name__,
                         error
@@ -617,13 +669,20 @@ class DelongiPrimadonna:
 
         Retries are delegated to ``bleak_retry_connector``, which knows how
         to deal with ESPHome proxies, transient GATT errors and the various
-        backend quirks far better than a hand written loop. It also keeps
-        Home Assistant from logging its own "connect() called without
-        bleak-retry-connector" warning on every attempt.
+        backend quirks far better than a hand written loop.
         """
         if self._client is not None and self._client.is_connected:
             return
 
+        if time.monotonic() < self._retry_after:
+            # Still backing off from a recent real failure - the streak
+            # was already logged once by ``_note_failure``.
+            raise DeviceNotPresent(
+                f'{self.mac} is backing off after a recent failure'
+            )
+
+        self._client = None
+        self.connected = False
         self._connecting = True
         try:
             self._device = bluetooth.async_ble_device_from_address(
@@ -632,66 +691,116 @@ class DelongiPrimadonna:
             if not self._device:
                 # Expected whenever the machine is off or out of range.
                 self._present = False
-                raise DeviceNotPresent(
-                    f'{self.mac} is not advertising'
-                )
+                raise DeviceNotPresent(f'{self.mac} is not advertising')
 
-            _LOGGER.debug('Connecting to %s', self.mac)
-
-            if HAS_RETRY_CONNECTOR:
-                self._client = await establish_connection(
-                    BleakClientWithServiceCache,
-                    self._device,
-                    self.name or self.mac,
-                    self._async_disconnected,
-                    max_attempts=retries,
-                    ble_device_callback=lambda: (
-                        bluetooth.async_ble_device_from_address(
-                            self._hass, self.mac, connectable=True
-                        )
-                    ),
-                )
-            else:  # pragma: no cover - legacy fallback
-                self._client = BleakClient(
-                    self._device,
-                    disconnected_callback=self._async_disconnected,
-                )
-                await asyncio.wait_for(self._client.connect(), timeout=20)
-
-            # Service discovery happens during connect; ``client.services``
-            # holds the result. Do not call get_services() - it raises a
-            # FutureWarning on recent Bleak.
-            await asyncio.wait_for(
-                self._client.start_notify(
-                    uuid.UUID(CONTROLL_CHARACTERISTIC),
-                    self._process_raw_data,
-                ),
-                timeout=10,
+            _LOGGER.debug("Connecting to %s", self.mac)
+            client = await establish_connection(
+                BleakClientWithServiceCache,
+                self._device,
+                self.name or self.mac,
+                self._async_disconnected,
+                max_attempts=retries,
             )
-            self._reset_backoff()
-        except Exception as error:
-            client = self._client
-            self._client = None
-            self.connected = False
-            if client is not None:
+            self._client = client
+
+            try:
+                self._rx_buffer.clear()
+                await asyncio.wait_for(
+                    client.start_notify(
+                        uuid.UUID(CONTROLL_CHARACTERISTIC),
+                        self._process_raw_data,
+                    ),
+                    timeout=10,
+                )
+                self.connected = True
+                self._reset_backoff()
+            except asyncio.CancelledError:
                 try:
                     await asyncio.wait_for(client.disconnect(), timeout=5)
                 except Exception:  # noqa: BLE001
                     pass
+                finally:
+                    self._client = None
+                raise
+            except Exception:
+                try:
+                    await asyncio.wait_for(client.disconnect(), timeout=5)
+                except Exception:  # noqa: BLE001
+                    pass
+                finally:
+                    self._client = None
+                raise
+
+        except Exception as error:
+            self.connected = False
             self._note_failure(error)
             raise
         finally:
             self._connecting = False
 
+    @callback
+    def _async_disconnected(self, _client) -> None:
+        """Handle the machine dropping the GATT link.
+
+        Also forgets the cached advertisement for this address: the
+        machine stopped advertising while connected, so whatever Home
+        Assistant last saw is stale, and its de-duplication could
+        otherwise suppress the next advertisement as "unchanged".
+        """
+        _LOGGER.debug('Disconnected from %s', self.mac)
+        self._client = None
+        self.connected = False
+        bluetooth.async_clear_advertisement_history(self._hass, self.mac)
+
     def _make_switch_command(self):
-        """Make hex command"""
-        base_command = list(BASE_COMMAND)
-        base_command[3] = '1' if self.switches.energy_save else '0'
-        base_command[4] = '1' if self.switches.cup_light else '0'
-        base_command[5] = '1' if self.switches.sounds else '0'
+        """Make hex command.
+
+        Uses the last settings byte read from the device as base so
+        that bits not managed by this integration (e.g. the cup warmer
+        on some models) are preserved instead of being overwritten.
+        """
+        base = (
+            self._switches_raw
+            if self._switches_raw is not None
+            else int(BASE_COMMAND, 2)
+        )
+        for bit, enabled in (
+            (SWITCH_BIT_ENERGY_SAVE, self.switches.energy_save),
+            (SWITCH_BIT_CUP_LIGHT, self.switches.cup_light),
+            (SWITCH_BIT_SOUNDS, self.switches.sounds),
+        ):
+            base = base | bit if enabled else base & ~bit
+        self._switches_raw = base
         hex_command = BYTES_SWITCH_COMMAND.copy()
-        hex_command[9] = int(''.join(base_command), 2)
+        hex_command[9] = base
         return hex_command
+
+    def _handle_parameter_data(self, value: bytes) -> None:
+        """Handle a parameter read response (0x95).
+
+        Layout: d0 <len> 95 0f <param_hi> <param_lo> <b3> <b2> <b1> <b0>
+        <crc16>. Parameter 0x3f carries the settings bitmask; its low
+        byte mirrors what BYTES_SWITCH_COMMAND writes.
+        """
+        if len(value) < 12:
+            return
+        param = (value[4] << 8) | value[5]
+        if param != PARAM_SWITCHES:
+            return
+        raw = value[9]
+        self._switches_raw = raw
+        self.switches.cup_light = bool(raw & SWITCH_BIT_CUP_LIGHT)
+        self.switches.sounds = bool(raw & SWITCH_BIT_SOUNDS)
+        self.switches.energy_save = bool(raw & SWITCH_BIT_ENERGY_SAVE)
+        _LOGGER.debug('Settings parameter 0x3f = 0x%02x', raw)
+
+    async def update_switches(self) -> None:
+        """Request the settings parameter with throttling."""
+        current_time = time.monotonic()
+        if current_time - self._last_switches_request < 30:
+            return
+        self._last_switches_request = current_time
+        await self.send_command(BYTES_LOAD_SWITCHES.copy())
 
     async def _event_trigger(self, value):
         """
@@ -733,6 +842,16 @@ class DelongiPrimadonna:
             )
         _LOGGER.debug('Event triggered: %s', event_data)
 
+    @staticmethod
+    def _has_valid_crc(packet: bytes) -> bool:
+        """Return whether an assembled BLE packet has a valid CRC."""
+        if len(packet) < 4:
+            return False
+
+        expected_crc = int.from_bytes(packet[-2:], byteorder='big')
+        actual_crc = crc_hqx(packet[:-2], 0x1D0F)
+        return actual_crc == expected_crc
+
     async def _process_raw_data(self, sender, value):
         """Assemble incoming BLE packets and pass complete messages."""
         self._rx_buffer.extend(value)
@@ -758,17 +877,32 @@ class DelongiPrimadonna:
                 return
 
             packet = bytes(self._rx_buffer[:msg_len])
+
+            if not self._has_valid_crc(packet):
+                _LOGGER.debug(
+                    "Discarding invalid BLE frame candidate: %s",
+                    hexlify(packet, " "),
+                )
+                del self._rx_buffer[0]
+                continue
+
             del self._rx_buffer[:msg_len]
             await self._handle_data(sender, packet)
 
     async def _handle_data(self, sender, value):
         """Handle notifications from the device."""
-        if (
-            self._response_event is not None
-            and not self._response_event.is_set()
-        ):
-            self._response_event.set()
         answer_id = value[2] if len(value) > 2 else None
+        expected_statistics_start = self._expected_statistics_start
+        response_start = (
+            ((value[4] << 8) | value[5])
+            if answer_id == 0xA2 and len(value) >= 12
+            else None
+        )
+        statistics_response_matches = (
+            expected_statistics_start is not None
+            and response_start is not None
+            and response_start >= expected_statistics_start
+        )
 
         if answer_id in [0x75, 0x70]:
             monitor_data = parse_monitor_data(value)
@@ -801,7 +935,29 @@ class DelongiPrimadonna:
             if profile_id is not None and status == 0:
                 self.active_profile_id = profile_id
         elif answer_id == 0xA2:
-            await self._parse_statistics(value)
+            if statistics_response_matches:
+                await self._parse_statistics(value)
+            else:
+                _LOGGER.debug(
+                    "Ignoring unexpected statistics response: "
+                    "expected start >= %s, got %s",
+                    expected_statistics_start,
+                    response_start,
+                )
+        elif answer_id == 0x95:
+            self._handle_parameter_data(value)
+
+        if (
+            self._response_event is not None
+            and not self._response_event.is_set()
+        ):
+            response_matches = (
+                statistics_response_matches
+                if expected_statistics_start is not None
+                else answer_id != 0xA2
+            )
+            if response_matches:
+                self._response_event.set()
 
         hex_value = hexlify(value, ' ')
 
@@ -822,6 +978,18 @@ class DelongiPrimadonna:
         # Power state
         self.switches.is_on = monitor_data.status > 0
 
+        # Dispensing: milk preparation (10) and hot water (11) are their
+        # own states; 7 covers both idle and dispensing, and the progress
+        # counter is what tells them apart - the same rule longshot uses
+        # for EcamStatus::Busy.
+        self.is_dispensing = (
+            monitor_data.status in (10, 11)
+            or (monitor_data.status == 7 and monitor_data.sub_status != 0)
+        )
+        self.dispensing_percentage = (
+            monitor_data.percentage if self.is_dispensing else 0
+        )
+
         # Nozzle state (only present in v2 / 0x75 packets)
         if monitor_data.nozzle_state != -1:
             self.steam_nozzle = NOZZLE_STATE.get(
@@ -835,10 +1003,8 @@ class DelongiPrimadonna:
         if monitor_data.alarms > 0:
             for i in range(32):
                 if (monitor_data.alarms >> i) & 1:
-                    self.status = DEVICE_STATUS.get(i, f"Alarm {i}")
+                    self.status = DEVICE_STATUS.get(i, 'unknown_alarm')
                     break
-        elif monitor_data.status in (0, 1, 5):
-            self.status = "Ready"
         else:
             self.status = MACHINE_STATUS.get(
                 monitor_data.status,
@@ -863,53 +1029,76 @@ class DelongiPrimadonna:
         NAME_SIZE = 20
         NAME_OFFSET = 1
         NAME_HEADER = 4
-        profile_index = 1
         idx = NAME_HEADER
-        while idx + NAME_SIZE < len(b):
-            profiles.setdefault(
-                profile_index,
-                b[idx:idx + NAME_SIZE]
-                .decode("utf-16-be")
-                .rstrip("\x00")
-                .strip(),
-            )
-            profile_index += 1
+        for profile_index in range(1, self._n_profiles + 1):
+            if idx + NAME_SIZE > len(b):
+                break
+            raw = b[idx:idx + NAME_SIZE]
             idx += NAME_SIZE + NAME_OFFSET
+            # Names are UTF-16-BE and NUL-terminated inside their slot.
+            # Cut at the terminator instead of decoding the padding, which
+            # is what produced the UnicodeDecodeError on the whole reply.
+            end = len(raw)
+            for pos in range(0, len(raw) - 1, 2):
+                if raw[pos] == 0 and raw[pos + 1] == 0:
+                    end = pos
+                    break
+            name = raw[:end].decode("utf-16-be", errors="ignore").strip()
+            if not name:
+                # An empty slot says nothing about the ones after it.
+                continue
+            profiles.setdefault(profile_index, name)
         return profiles
 
     async def power_on(self) -> None:
         """Turn the device on."""
-        await self.send_command(BYTES_POWER)
+        await self.send_command(BYTES_POWER, wait_for_device=True)
+
+    async def power_off(self) -> None:
+        """Put the device into standby."""
+        await self.send_command(BYTES_POWER_OFF, wait_for_device=True)
 
     async def cup_light_on(self) -> None:
         """Turn the cup light on."""
         self.switches.cup_light = True
-        await self.send_command(self._make_switch_command())
+        await self.send_command(
+            self._make_switch_command(), wait_for_device=True
+        )
 
     async def cup_light_off(self) -> None:
         """Turn the cup light off."""
         self.switches.cup_light = False
-        await self.send_command(self._make_switch_command())
+        await self.send_command(
+            self._make_switch_command(), wait_for_device=True
+        )
 
     async def energy_save_on(self):
         """Enable energy save mode"""
         self.switches.energy_save = True
-        await self.send_command(self._make_switch_command())
+        await self.send_command(
+            self._make_switch_command(), wait_for_device=True
+        )
 
     async def energy_save_off(self):
         """Enable energy save mode"""
         self.switches.energy_save = False
-        await self.send_command(self._make_switch_command())
+        await self.send_command(
+            self._make_switch_command(), wait_for_device=True
+        )
 
     async def sound_alarm_on(self):
         """Enable sound alarm"""
         self.switches.sounds = True
-        await self.send_command(self._make_switch_command())
+        await self.send_command(
+            self._make_switch_command(), wait_for_device=True
+        )
 
     async def sound_alarm_off(self):
         """Disable sound alarm"""
         self.switches.sounds = False
-        await self.send_command(self._make_switch_command())
+        await self.send_command(
+            self._make_switch_command(), wait_for_device=True
+        )
 
     async def beverage_start(self, beverage: str) -> None:
         """Start beverage by name (recipe or legacy enum)."""
@@ -926,7 +1115,9 @@ class DelongiPrimadonna:
                     "Starting %s (recipe %d) via legacy",
                     beverage, rid,
                 )
-                await self.send_command(BEVERAGE_COMMANDS[legacy].on)
+                await self.send_command(
+                    BEVERAGE_COMMANDS[legacy].on, wait_for_device=True
+                )
             else:
                 _LOGGER.info(
                     "Starting %s (recipe %d) via dynamic",
@@ -935,7 +1126,7 @@ class DelongiPrimadonna:
                 cmd = _build_start_command(
                     rid, recipe['coffee_qty'], recipe['milk_qty']
                 )
-                await self.send_command(cmd)
+                await self.send_command(cmd, wait_for_device=True)
             self.cooking = beverage
             return
         _LOGGER.warning("Unknown beverage: %s", beverage)
@@ -946,20 +1137,23 @@ class DelongiPrimadonna:
             return
         recipe = self._recipe_map.get(self.cooking)
         if recipe:
-            await self.send_command(_build_stop_command(recipe['id']))
+            await self.send_command(
+                _build_stop_command(recipe['id']), wait_for_device=True
+            )
         else:
             _LOGGER.warning("Cannot cancel unknown beverage: %s", self.cooking)
         self.cooking = BEVERAGE_NONE
 
     async def debug(self):
         """Send command which causes status reply"""
-        await self.send_command(DEBUG)
+        await self.send_command(DEBUG, wait_for_device=True)
 
     async def get_device_name(self):
         """
         Get device name
         :return: device name
         """
+        was_not_present = False
         async with self._lock:
             try:
                 await self._connect()
@@ -984,6 +1178,7 @@ class DelongiPrimadonna:
             # armed the backoff, so these handlers stay at debug level.
             except DeviceNotPresent:
                 self.connected = False
+                was_not_present = not self._present
             except BleakDBusError as error:
                 self.connected = False
                 _LOGGER.debug('BleakDBusError: %s', error)
@@ -993,9 +1188,14 @@ class DelongiPrimadonna:
             except asyncio.exceptions.TimeoutError as error:
                 self.connected = False
                 _LOGGER.debug('TimeoutError: %s at device connection', error)
-            except asyncio.exceptions.CancelledError as error:
+            except asyncio.CancelledError:
                 self.connected = False
-                _LOGGER.debug('CancelledError: %s', error)
+                raise
+
+        if was_not_present:
+            # Outside the lock: this may recurse back into
+            # get_device_name() if the probe finds the machine.
+            await self._async_probe_if_due()
 
         if self.connected and not self._profiles_loaded:
             command = BYTES_LOAD_PROFILES.copy()
@@ -1011,44 +1211,55 @@ class DelongiPrimadonna:
         packet = BYTES_TIME_COMMAND.copy()
         packet[4] = dt.hour & 0xFF
         packet[5] = dt.minute & 0xFF
-        await self.send_command(packet)
+        await self.send_command(packet, wait_for_device=True)
 
     async def select_profile(self, profile_id) -> None:
         """select a profile."""
         _LOGGER.debug("Send select profile command id=%s", profile_id)
         message = [0x0D, 0x06, 0xA9, 0xF0, profile_id, 0xD7, 0xC0]
-        await self.send_command(message)
+        await self.send_command(message, wait_for_device=True)
 
     async def set_auto_power_off(self, power_off_interval) -> None:
         """Set auto power off time."""
         message = copy.deepcopy(BYTES_AUTOPOWEROFF_COMMAND)
         message[9] = power_off_interval
-        await self.send_command(message)
+        await self.send_command(message, wait_for_device=True)
 
     async def set_water_hardness(self, hardness_level) -> None:
         """Set water hardness"""
         message = copy.deepcopy(BYTES_WATER_HARDNESS_COMMAND)
         message[9] = hardness_level
-        await self.send_command(message)
+        await self.send_command(message, wait_for_device=True)
 
     async def set_water_temperature(self, temperature_level) -> None:
         """Set water temperature"""
         message = copy.deepcopy(BYTES_WATER_TEMPERATURE_COMMAND)
         message[9] = temperature_level
-        await self.send_command(message)
+        await self.send_command(message, wait_for_device=True)
 
     async def common_command(self, command: str) -> None:
         """Send custom BLE command"""
         message = [int(x, 16) for x in command.split(' ')]
-        await self.send_command(message)
+        await self.send_command(message, wait_for_device=True)
 
-    async def send_command(self, message, retries=3, wait_for_device=True):
-        """Send a command, waking the machine up if necessary.
+    async def send_command(
+        self, message, retries=3, wait_for_device=False
+    ) -> bool:
+        """Send a command and report whether a reply arrived.
 
-        ``wait_for_device`` is True for anything a person triggered: those
-        commands are rare and must not fail just because the machine
-        happened to be between advertisements. Background polling passes
-        False so it never blocks.
+        Correlation is only exact for statistics (0xA2), which are matched
+        on the requested start address. Every other command still uses the
+        original "first frame after the write wins" rule, so an unrelated
+        monitor frame can satisfy the wait. The return value is therefore
+        only meaningful for 0xA2; ``get_statistics`` is its sole consumer.
+        Do not treat True as an acknowledgement for other commands without
+        adding per-answer-id correlation first (see PR #255).
+
+        ``wait_for_device`` must be passed True for anything a person
+        triggered: those commands are rare and must not fail just because
+        the machine happened to be between advertisements. It defaults to
+        False so a caller that forgets to think about it - e.g. routine
+        polling - never silently inherits a 25s wait.
         """
         if not self._address_present():
             if not wait_for_device:
@@ -1057,7 +1268,7 @@ class DelongiPrimadonna:
                     self.name,
                 )
                 self.connected = False
-                return
+                return False
             if not await self._async_wait_for_device():
                 # A command a person asked for must never fail silently.
                 _LOGGER.warning(
@@ -1069,7 +1280,8 @@ class DelongiPrimadonna:
                     DISCOVERY_TIMEOUT,
                 )
                 self.connected = False
-                return
+                return False
+
         async with self._lock:
             message_to_send = copy.deepcopy(message)
             for attempt in range(retries):
@@ -1083,23 +1295,42 @@ class DelongiPrimadonna:
                         'Send command: %s',
                         hexlify(bytearray(message_to_send), " ")
                     )
+
                     self._response_event = asyncio.Event()
-                    await self._client.write_gatt_char(
-                        CONTROLL_CHARACTERISTIC, bytearray(message_to_send)
-                    )
+                    if (
+                        len(message_to_send) > 5
+                        and message_to_send[2] == 0xA2
+                    ):
+                        self._expected_statistics_start = (
+                            message_to_send[4] << 8
+                        ) | message_to_send[5]
+                    else:
+                        self._expected_statistics_start = None
+
+                    response_received = False
                     try:
-                        await asyncio.wait_for(
-                            self._response_event.wait(),
-                            timeout=10,
+                        await self._client.write_gatt_char(
+                            CONTROLL_CHARACTERISTIC,
+                            bytearray(message_to_send),
                         )
-                    except asyncio.TimeoutError:
-                        _LOGGER.warning(
-                            'Timeout waiting for response to command: %s',
-                            hexlify(bytearray(message_to_send), " ")
-                        )
+                        try:
+                            await asyncio.wait_for(
+                                self._response_event.wait(),
+                                timeout=10,
+                            )
+                            response_received = True
+                        except asyncio.TimeoutError:
+                            _LOGGER.warning(
+                                'Timeout waiting for a reply to the %s '
+                                'command: %s',
+                                describe_command(message_to_send),
+                                hexlify(bytearray(message_to_send), " ")
+                            )
                     finally:
                         self._response_event = None
-                    return
+                        self._expected_statistics_start = None
+
+                    return response_received
                 except DeviceNotPresent:
                     self.connected = False
                     if wait_for_device:
@@ -1107,21 +1338,27 @@ class DelongiPrimadonna:
                             '%s stopped advertising while the command was '
                             'being sent', self.name
                         )
-                    return
+                    return False
                 except BleakError as error:
                     self.connected = False
-                    self._client = None
-                    _LOGGER.debug(
+                    _LOGGER.warning(
                         'BleakError: %s (attempt %d)',
                         error,
                         attempt + 1
                     )
+                    if self._client is not None:
+                        try:
+                            await asyncio.wait_for(
+                                self._client.disconnect(),
+                                timeout=5,
+                            )
+                        except Exception:  # noqa: BLE001
+                            pass
+                    self._client = None
                     await asyncio.sleep(2)
-            _LOGGER.warning(
-                'Failed to send command to %s after %d attempts',
-                self.name,
-                retries,
-            )
+
+            _LOGGER.error('Failed to send command after %d attempts', retries)
+            return False
 
     async def _parse_statistics(self, data: bytes) -> None:
         """Parse statistics response"""
@@ -1172,40 +1409,6 @@ class DelongiPrimadonna:
             water_ml = self.statistics.get(106, 0)
             self.statistics[10106] = round(water_ml / 2000.0, 2)
 
-    def schedule_statistics_update(self) -> None:
-        """Schedule a statistics refresh as a single tracked background task.
-
-        Deduplicates: a request while one is already in flight is a no-op,
-        so entities polling concurrently don't stack one task each.
-        """
-        task = self._statistics_task
-        if task is not None and not task.done():
-            return
-        self._statistics_task = self._hass.async_create_background_task(
-            self._run_statistics_update(), "delonghi statistics update",
-        )
-
-    async def _run_statistics_update(self) -> None:
-        """Run update_statistics(), logging unexpected failures."""
-        try:
-            await self.update_statistics()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            _LOGGER.exception("Statistics update failed")
-
-    async def cancel_statistics_update(self) -> None:
-        """Cancel and wait for a pending statistics update, if any."""
-        task = self._statistics_task
-        self._statistics_task = None
-        if task is None or task.done():
-            return
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
     async def update_statistics(self) -> None:
         """Update statistics with throttling."""
         # Prevent concurrent updates from multiple sensors
@@ -1214,39 +1417,47 @@ class DelongiPrimadonna:
 
         async with self._stats_lock:
             current_time = time.monotonic()
-            # Update at most once every 60 seconds
+            # Attempt statistics polling at most once every 60 seconds,
+            # including failed attempts, to avoid repeated BLE retries.
             if current_time - self._last_stats_request < 60:
                 return
 
             self._last_stats_request = current_time
-            # Maintenance counters (100-109)
-            await self.get_statistics(100, 10)
+            # Start sparse statistics sequence at parameter 100
+            if not await self.get_statistics(100, 10):
+                return
             await asyncio.sleep(0.3)
 
-            # Extended maintenance (110-119)
-            await self.get_statistics(110, 10)
+            # Extended maintenance counters. Kept at 110 as on master:
+            # 110-119 covers 111, the milk cleaning counter that
+            # sensor.py actually reads. The PR moved the start to 111
+            # without explanation, which drops 110 and gains nothing.
+            if not await self.get_statistics(110, 10):
+                return
             await asyncio.sleep(0.3)
 
             # Coffee beverage totals (3000-3009)
-            await self.get_statistics(3000, 10)
-            await asyncio.sleep(0.3)
-
-            # Request additional coffee totals range
-            # Covers: 3077-3080 (3077 is combined with 3000 for total coffee)
-            await self.get_statistics(3077, 4)
+            if not await self.get_statistics(3000, 10):
+                return
             await asyncio.sleep(0.3)
 
             # Request cold milk, choco and tea statistics
             # Covers: 3017-3026 (3017=cold milk, 3021=choco, 3025=tea)
-            await self.get_statistics(3017, 10)
+            if not await self.get_statistics(3017, 10):
+                return
             await asyncio.sleep(0.3)
 
-    async def get_statistics(self, start_index: int, count: int) -> None:
+            # Request optional additional coffee totals range
+            # Covers: 3077-3080 (3077 is combined with 3000 for total coffee)
+            if not await self.get_statistics(3077, 4):
+                return
+            await asyncio.sleep(0.3)
+
+    async def get_statistics(self, start_index: int, count: int) -> bool:
         """Get statistics from the machine"""
         message = copy.deepcopy(BYTES_STATISTICS_COMMAND)
         message[4] = (start_index >> 8) & 0xFF
         message[5] = start_index & 0xFF
         message[6] = count
 
-        # Background polling: never block waiting for an advertisement.
-        await self.send_command(message, wait_for_device=False)
+        return await self.send_command(message)

@@ -15,7 +15,7 @@ async def test_parsing():
     # Packet from user's logs
     # d0 41 a2 0f 00 64 00 13 a8 9e 00 65 00 00 00 0a 00 69 00 00 00 0f 00 6a 00 23 65 e8 00 6c 00 00 00 00 00 6d 00 00 00 00 00 6f 00 00 00 12 00 74 00 00 02 84 02 84 00 00 00 00 0b b8 00 00 39 7e 54 d1
     log_packet = unhexlify("d041a20f00640013a89e00650000000a00690000000f006a002365e8006c00000000006d00000000006f000000120074000002840284000000000bb80000397e54d1")
-    await device._handle_data(None, log_packet)
+    await device._parse_statistics(log_packet)
 
     print(f"ID 100 (Implicit): {device.statistics.get(100)}")
     print(f"ID 101 (Explicit): {device.statistics.get(101)}")

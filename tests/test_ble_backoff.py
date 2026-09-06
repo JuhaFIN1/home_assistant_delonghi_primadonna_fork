@@ -8,6 +8,7 @@ log records at Home Assistant's default level.
 import asyncio
 import logging
 import sys
+import time
 import types
 from unittest.mock import MagicMock
 
@@ -15,6 +16,7 @@ import pytest
 
 PRESENT = {"value": False}
 ADVERTISES = {"will_appear": False, "calls": 0}
+CLEARED_HISTORY = {"addresses": []}
 
 
 def _mod(name, **attrs):
@@ -65,6 +67,10 @@ class _Bluetooth:
             return MagicMock()
         raise asyncio.TimeoutError
 
+    @staticmethod
+    def async_clear_advertisement_history(hass, address):
+        CLEARED_HISTORY["addresses"].append(address)
+
 
 def _install_stubs():
     _mod("bleak", BleakClient=MagicMock)
@@ -110,6 +116,7 @@ def machine():
     PRESENT["value"] = False
     ADVERTISES["will_appear"] = False
     ADVERTISES["calls"] = 0
+    CLEARED_HISTORY["addresses"] = []
     hass = MagicMock()
     hass.async_create_task = lambda coro: coro.close()
     return dev.DelongiPrimadonna(
@@ -122,14 +129,14 @@ def test_absent_machine_is_silent(machine, caplog):
     caplog.set_level(logging.INFO)
     asyncio.run(machine.async_start())
     for _ in range(3600 // 30):
-        asyncio.run(machine.async_refresh())
+        asyncio.run(machine.get_device_name())
     assert caplog.records == []
 
 
 def test_absent_machine_never_connects(machine):
     """No connection is attempted while the machine is not advertising."""
     asyncio.run(machine.async_start())
-    asyncio.run(machine.async_refresh())
+    asyncio.run(machine.get_device_name())
     assert machine.connected is False
     assert dev.establish_connection.call_count == 0
 
@@ -251,7 +258,7 @@ def test_probe_is_rate_limited(machine):
     """The safety-net probe runs at most once per interval."""
     asyncio.run(machine.async_start())
     for _ in range(3600 // 30):
-        asyncio.run(machine.async_refresh())
+        asyncio.run(machine.get_device_name())
 
     # One hour of polling, one probe per PROBE_INTERVAL - not per poll.
     assert ADVERTISES["calls"] <= 3600 // dev.PROBE_INTERVAL + 1
@@ -259,12 +266,11 @@ def test_probe_is_rate_limited(machine):
 
 def test_probe_recovers_a_missed_advertisement(machine):
     """If a callback is ever missed, the probe still brings us back."""
-    asyncio.run(machine.async_start())
     reconnected = []
     machine.get_device_name = lambda: _noop(reconnected)
     ADVERTISES["will_appear"] = True
 
-    asyncio.run(machine.async_refresh())
+    asyncio.run(machine._async_probe_if_due())
 
     assert reconnected == ["called"]
 
@@ -282,3 +288,59 @@ def test_first_real_failure_warns_once(machine, caplog):
 
     warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert len(warnings) == 1
+
+
+def test_async_start_does_not_connect(machine):
+    """Registering advertisement callbacks must not itself connect.
+
+    The actual initial device_name fetch is backgrounded by
+    async_setup_entry, so config-entry setup stays fast regardless of
+    whether the machine is present - async_start() itself must not add
+    a blocking connection attempt of its own.
+    """
+    PRESENT["value"] = True
+
+    asyncio.run(machine.async_start())
+
+    assert dev.establish_connection.call_count == 0
+
+
+def test_disconnect_clears_advertisement_history(machine):
+    """A dropped GATT link forgets the cached advertisement.
+
+    Otherwise Home Assistant's de-duplication could treat the machine's
+    next advertisement as unchanged and never re-fire the callback that
+    wakes the integration back up.
+    """
+    machine._async_disconnected(MagicMock())
+
+    assert CLEARED_HISTORY["addresses"] == [machine.mac]
+
+
+def test_backoff_skips_connect_without_probing(machine):
+    """While backing off from a real failure, don't retry yet - and
+    don't treat it as absence worth probing for, since the machine is
+    still present, just refusing to connect for another reason.
+    """
+    machine._present = True
+    machine._retry_after = time.monotonic() + 100
+    machine._next_probe = 0.0
+
+    asyncio.run(machine.get_device_name())
+
+    assert dev.establish_connection.call_count == 0
+    assert ADVERTISES["calls"] == 0
+
+
+def test_send_command_defaults_to_not_waiting():
+    """A caller that forgets wait_for_device must not inherit a 25s wait.
+
+    Only explicit user-triggered paths (power_on, switches, ...) opt in;
+    everything else, including future callers, stays non-blocking by
+    default.
+    """
+    import inspect
+
+    default = inspect.signature(dev.DelongiPrimadonna.send_command) \
+        .parameters["wait_for_device"].default
+    assert default is False

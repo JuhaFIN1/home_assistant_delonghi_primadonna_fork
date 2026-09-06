@@ -56,6 +56,9 @@
       },
       "time_sync": {
         "name": "时间同步"
+      },
+      "power": {
+        "name": "Power"
       }
     },
     "binary_sensor": {
@@ -149,6 +152,8 @@
           "rinsing": "冲洗中",
           "preparing": "准备中",
           "delivering_hot_water": "出热水中",
+          "delivering_steam": "出蒸汽中",
+          "changing_filter": "更换滤芯中",
           "cleaning_milk_spout": "清洗牛奶出口",
           "descaling": "除垢"
         }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from binascii import hexlify
+from collections import Counter
 from typing import Any
 
 import voluptuous
@@ -21,10 +22,31 @@ from .model import get_machine_models_by_connection, guess_machine_model
 _LOGGER = logging.getLogger(__name__)
 
 
-MODEL_OPTIONS = [
-    SelectOptionDict(value=model.product_code, label=model.name)
+_SELECTABLE_MODELS = [
+    model
     for model in get_machine_models_by_connection()
     if model.product_code and model.name
+]
+
+# The 87 Bluetooth models share only 46 distinct names, so 16 names are
+# ambiguous and 57 entries sit behind a shared label - the exact label
+# "Maestosa" is offered seven times, leaving the user picking blind
+# between identical entries (#223). ("MAESTOSA CN" is a separate label
+# and not part of that ambiguity, which is why eight entries carry a
+# Maestosa-ish name but only seven collide.) Qualify only the ambiguous
+# names with their product code; unique names stay clean.
+_NAME_COUNTS = Counter(model.name for model in _SELECTABLE_MODELS)
+
+MODEL_OPTIONS = [
+    SelectOptionDict(
+        value=model.product_code,
+        label=(
+            model.name
+            if _NAME_COUNTS[model.name] == 1
+            else f'{model.name} ({model.product_code})'
+        ),
+    )
+    for model in _SELECTABLE_MODELS
 ]
 
 STEP_USER_DATA_SCHEMA = voluptuous.Schema(

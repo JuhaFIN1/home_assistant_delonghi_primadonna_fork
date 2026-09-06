@@ -56,6 +56,9 @@
       },
       "time_sync": {
         "name": "時間 동기화"
+      },
+      "power": {
+        "name": "Power"
       }
     },
     "binary_sensor": {
@@ -149,6 +152,8 @@
           "rinsing": "헹굼 중",
           "preparing": "준비 중",
           "delivering_hot_water": "온수 추출 중",
+          "delivering_steam": "스팀 추출 중",
+          "changing_filter": "필터 교체 중",
           "cleaning_milk_spout": "우유 배출구 세척",
           "descaling": "스케일 제거"
         }

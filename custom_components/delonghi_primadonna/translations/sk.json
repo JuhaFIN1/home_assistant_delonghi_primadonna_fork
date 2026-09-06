@@ -56,6 +56,9 @@
       },
       "time_sync": {
         "name": "Synchronizácia času"
+      },
+      "power": {
+        "name": "Power"
       }
     },
     "binary_sensor": {
@@ -148,6 +151,8 @@
           "rinsing": "Oplachovanie",
           "preparing": "Pripravuje sa",
           "delivering_hot_water": "Dodáva sa horúca voda",
+          "delivering_steam": "Dodáva sa para",
+          "changing_filter": "Výmena filtra",
           "cleaning_milk_spout": "Čistenie trysky na mlieko",
           "descaling": "Odvápňovanie"
         }

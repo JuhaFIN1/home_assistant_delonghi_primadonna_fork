@@ -83,7 +83,6 @@ async def async_setup_entry(
         ]
     )
 
-    delongh_device.schedule_statistics_update()
     return True
 
 
@@ -148,7 +147,7 @@ class DelongiPrimadonnaStatusSensor(
 
     @property
     def icon(self):
-        if self.device.status == "Ready":
+        if self.device.status == 'ready':
             return 'mdi:thumb-up-outline'
         return 'mdi:alert-circle-outline'
 
@@ -247,11 +246,7 @@ class DelongiPrimadonnaStatisticsSensor(
 
     async def async_update(self) -> None:
         """Fetch new state data for the sensor."""
-        if self.device.connected and self.device.available:
-            # A single tracked background task services every statistics
-            # sensor's poll; schedule_statistics_update() is a no-op while
-            # one is already in flight, and update_statistics() itself
-            # throttles to once a minute.
+        if self.device.connected:
             self.device.schedule_statistics_update()
 
 

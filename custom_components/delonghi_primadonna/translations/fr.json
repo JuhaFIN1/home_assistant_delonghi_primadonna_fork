@@ -56,6 +56,9 @@
       },
       "time_sync": {
         "name": "Synchronisation de l'heure"
+      },
+      "power": {
+        "name": "Power"
       }
     },
     "binary_sensor": {
@@ -149,6 +152,8 @@
           "rinsing": "Rinçage",
           "preparing": "Préparation",
           "delivering_hot_water": "Distribution d'eau chaude",
+          "delivering_steam": "Distribution de vapeur",
+          "changing_filter": "Changement de filtre",
           "cleaning_milk_spout": "Nettoyage de la buse à lait",
           "descaling": "Détartrage"
         }

@@ -56,6 +56,9 @@
       },
       "time_sync": {
         "name": "時刻同期"
+      },
+      "power": {
+        "name": "Power"
       }
     },
     "binary_sensor": {
@@ -149,6 +152,8 @@
           "rinsing": "すすぎ中",
           "preparing": "準備中",
           "delivering_hot_water": "お湯の吐出中",
+          "delivering_steam": "スチーム吐出中",
+          "changing_filter": "フィルター交換中",
           "cleaning_milk_spout": "ミルク排出口のクリーニング",
           "descaling": "スケール除去"
         }

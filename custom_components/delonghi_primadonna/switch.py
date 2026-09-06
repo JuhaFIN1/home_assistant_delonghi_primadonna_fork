@@ -1,6 +1,7 @@
 """Switch entities for Delonghi Primadonna."""
 
 import datetime
+import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -11,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .base_entity import DelonghiDeviceEntity
-from .const import DOMAIN
+from .const import DOMAIN, STANDBY_VERIFIED_PRODUCT_CODES
 from .device import DelongiPrimadonna
 from .model import get_machine_model
 
@@ -32,6 +33,11 @@ async def async_setup_entry(
         DelongiPrimadonnaSoundsSwitch(delongh_device, hass),
     ]
 
+    if delongh_device.product_code in STANDBY_VERIFIED_PRODUCT_CODES:
+        switches.append(
+            DelongiPrimadonnaPowerSwitch(delongh_device, hass),
+        )
+
     if model and model.cup_light_settings:
         switches.insert(
             0,
@@ -48,19 +54,36 @@ async def async_setup_entry(
     return True
 
 
+class SettingsBackedSwitch:
+    """Shared refresh for the switches carried by the settings parameter.
+
+    All of them are answered by one read of parameter 0x3f, so the request is
+    issued once here and throttled in the device rather than per entity.
+    """
+
+    async def async_update(self) -> None:
+        """Refresh the settings parameter from the device."""
+        if self.device.connected:
+            await self.device.update_switches()
+
+
 class DelongiPrimadonnaCupLightSwitch(
-    DelonghiDeviceEntity, ToggleEntity, RestoreEntity
+    SettingsBackedSwitch, DelonghiDeviceEntity, ToggleEntity, RestoreEntity
 ):
     """This switch enable/disable the cup light"""
 
-    _attr_is_on = False
     _attr_icon = 'mdi:lightbulb'
     _attr_translation_key = 'cup_light'
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         if (last_state := await self.async_get_last_state()) is not None:
-            self._attr_is_on = last_state.state == 'on'
+            self.device.switches.cup_light = last_state.state == 'on'
+
+    @property
+    def is_on(self) -> bool:
+        """Return the state read back from the device."""
+        return self.device.switches.cup_light
 
     @property
     def entity_category(self, **kwargs: Any) -> None:
@@ -69,13 +92,13 @@ class DelongiPrimadonnaCupLightSwitch(
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the device on."""
+        self.device.switches.cup_light = True
         self.hass.async_create_task(self.device.cup_light_on())
-        self._attr_is_on = True
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the device off."""
+        self.device.switches.cup_light = False
         self.hass.async_create_task(self.device.cup_light_off())
-        self._attr_is_on = False
 
 
 class DelongiPrimadonnaNotificationSwitch(
@@ -114,17 +137,21 @@ class DelongiPrimadonnaNotificationSwitch(
 
 
 class DelongiPrimadonnaPowerSaveSwitch(
-    DelonghiDeviceEntity, ToggleEntity, RestoreEntity
+    SettingsBackedSwitch, DelonghiDeviceEntity, ToggleEntity, RestoreEntity
 ):
 
-    _attr_is_on = False
     _attr_icon = 'mdi:lightning-bolt'
     _attr_translation_key = 'energy_save_mode'
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         if (last_state := await self.async_get_last_state()) is not None:
-            self._attr_is_on = last_state.state == 'on'
+            self.device.switches.energy_save = last_state.state == 'on'
+
+    @property
+    def is_on(self) -> bool:
+        """Return the state read back from the device."""
+        return self.device.switches.energy_save
 
     @property
     def entity_category(self, **kwargs: Any) -> None:
@@ -133,27 +160,31 @@ class DelongiPrimadonnaPowerSaveSwitch(
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the energy save on"""
+        self.device.switches.energy_save = True
         self.hass.async_create_task(self.device.energy_save_on())
-        self._attr_is_on = True
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the energy save off"""
+        self.device.switches.energy_save = False
         self.hass.async_create_task(self.device.energy_save_off())
-        self._attr_is_on = False
 
 
 class DelongiPrimadonnaSoundsSwitch(
-    DelonghiDeviceEntity, ToggleEntity, RestoreEntity
+    SettingsBackedSwitch, DelonghiDeviceEntity, ToggleEntity, RestoreEntity
 ):
 
-    _attr_is_on = False
     _attr_icon = 'mdi:volume-high'
     _attr_translation_key = 'sounds'
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         if (last_state := await self.async_get_last_state()) is not None:
-            self._attr_is_on = last_state.state == 'on'
+            self.device.switches.sounds = last_state.state == 'on'
+
+    @property
+    def is_on(self) -> bool:
+        """Return the state read back from the device."""
+        return self.device.switches.sounds
 
     @property
     def entity_category(self, **kwargs: Any) -> None:
@@ -162,40 +193,86 @@ class DelongiPrimadonnaSoundsSwitch(
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the sounds on."""
+        self.device.switches.sounds = True
         self.hass.async_create_task(self.device.sound_alarm_on())
-        self._attr_is_on = True
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the sounds off."""
+        self.device.switches.sounds = False
         self.hass.async_create_task(self.device.sound_alarm_off())
-        self._attr_is_on = False
 
 
 class DelongiPrimadonnaTimeSyncSwitch(
         DelonghiDeviceEntity, ToggleEntity, RestoreEntity
 ):
-    _attr_is_on = False
+    """Keep the machine clock in step with Home Assistant.
+
+    While on, the clock is set right away and then re-synced once a day.
+    """
+
     _attr_icon = 'mdi:clock-time-eight-outline'
     _attr_translation_key = 'time_sync'
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         if (last_state := await self.async_get_last_state()) is not None:
-            self._attr_is_on = last_state.state == 'on'
+            self.device.sync_time = last_state.state == 'on'
+
+    @property
+    def is_on(self) -> bool:
+        """Return whether time synchronization is enabled."""
+        return self.device.sync_time
 
     @property
     def entity_category(self, **kwargs: Any) -> None:
         """Return the category of the entity."""
         return EntityCategory.CONFIG
 
-    def turn_on(self, **kwargs: Any) -> None:
-        """Turn the sounds on."""
+    async def async_update(self) -> None:
+        """Re-sync the clock once a day while enabled."""
+        if not self.device.sync_time:
+            return
+        now = time.monotonic()
+        if now - self.device.last_time_sync < 24 * 3600:
+            return
+        self.device.last_time_sync = now
         self.hass.async_create_task(
             self.device.set_time(datetime.datetime.now())
         )
-        self._attr_is_on = True
 
-    def turn_off(self, **kwargs: Any) -> None:
-        """Turn the sounds off."""
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable time sync and set the clock right away."""
+        self.device.sync_time = True
+        self.device.last_time_sync = time.monotonic()
+        self.hass.async_create_task(
+            self.device.set_time(datetime.datetime.now())
+        )
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable time synchronization."""
         self.device.sync_time = False
-        self._attr_is_on = False
+
+
+class DelongiPrimadonnaPowerSwitch(DelonghiDeviceEntity, ToggleEntity):
+    """Turn the machine on, or put it into standby.
+
+    Only offered on the models listed in STANDBY_VERIFIED_PRODUCT_CODES.
+    The state follows the machine status from the monitor packets, so it
+    also reflects use of the physical power button.
+    """
+
+    _attr_icon = 'mdi:power'
+    _attr_translation_key = 'power'
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while the machine is not in standby."""
+        return self.device.switches.is_on
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the machine on."""
+        self.hass.async_create_task(self.device.power_on())
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Put the machine into standby."""
+        self.hass.async_create_task(self.device.power_off())
