@@ -664,17 +664,24 @@ class DelongiPrimadonna:
                 self._client = None
                 self.connected = False
 
-    async def _connect(self, retries=3):
+    async def _connect(self, retries=3, ignore_backoff=False):
         """Connect to the device.
 
         Retries are delegated to ``bleak_retry_connector``, which knows how
         to deal with ESPHome proxies, transient GATT errors and the various
         backend quirks far better than a hand written loop.
+
+        ``ignore_backoff`` is for commands a person just triggered: the
+        backoff window exists to protect background polling from a
+        machine that refuses connections, not to make a button silently
+        do nothing while the machine is advertising the whole time. A
+        real failure on the bypassed attempt still widens the window via
+        ``_note_failure``.
         """
         if self._client is not None and self._client.is_connected:
             return
 
-        if time.monotonic() < self._retry_after:
+        if not ignore_backoff and time.monotonic() < self._retry_after:
             # Still backing off from a recent real failure - the streak
             # was already logged once by ``_note_failure``.
             raise DeviceNotPresent(
@@ -742,15 +749,26 @@ class DelongiPrimadonna:
     def _async_disconnected(self, _client) -> None:
         """Handle the machine dropping the GATT link.
 
-        Also forgets the cached advertisement for this address: the
-        machine stopped advertising while connected, so whatever Home
-        Assistant last saw is stale, and its de-duplication could
-        otherwise suppress the next advertisement as "unchanged".
+        Clears both the cached advertisement and our own ``_present``
+        flag: the machine stopped advertising while connected, so
+        whatever either side last saw is stale. Without also resetting
+        ``_present`` here, the next advertisement would hit its sticky
+        True value and take the no-op branch in
+        ``_async_on_advertisement`` instead of the fresh-return one that
+        resets the backoff.
+
+        ``async_clear_advertisement_history`` only exists from Home
+        Assistant 2026.5.0 onward; ``hacs.json`` declares a 2023.7.0
+        floor, so the call must stay optional.
         """
         _LOGGER.debug('Disconnected from %s', self.mac)
         self._client = None
         self.connected = False
-        bluetooth.async_clear_advertisement_history(self._hass, self.mac)
+        self._present = False
+        if hasattr(bluetooth, 'async_clear_advertisement_history'):
+            bluetooth.async_clear_advertisement_history(
+                self._hass, self.mac
+            )
 
     def _make_switch_command(self):
         """Make hex command.
@@ -1286,7 +1304,7 @@ class DelongiPrimadonna:
             message_to_send = copy.deepcopy(message)
             for attempt in range(retries):
                 try:
-                    await self._connect()
+                    await self._connect(ignore_backoff=wait_for_device)
                     crc = crc_hqx(bytearray(message_to_send[:-2]), 0x1D0F)
                     crc_bytes = crc.to_bytes(2, byteorder='big')
                     message_to_send[-2] = crc_bytes[0]

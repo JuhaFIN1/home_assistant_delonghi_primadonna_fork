@@ -72,6 +72,25 @@ class _Bluetooth:
         CLEARED_HISTORY["addresses"].append(address)
 
 
+_STUB_MODULE_NAMES = [
+    "bleak",
+    "bleak.exc",
+    "bleak_retry_connector",
+    "homeassistant",
+    "homeassistant.config_entries",
+    "homeassistant.helpers",
+    "homeassistant.helpers.device_registry",
+    "homeassistant.components",
+    "homeassistant.components.bluetooth",
+    "homeassistant.backports",
+    "homeassistant.backports.enum",
+    "homeassistant.const",
+    "homeassistant.core",
+    "delonghi_primadonna",
+    "delonghi_primadonna.device",
+]
+
+
 def _install_stubs():
     _mod("bleak", BleakClient=MagicMock)
     _mod("bleak.exc", BleakError=_BleakError, BleakDBusError=_BleakDBusError)
@@ -105,10 +124,37 @@ def _install_stubs():
     core.__getattr__ = lambda name: MagicMock()
 
 
-_install_stubs()
-sys.path.insert(0, "custom_components")
+dev = None
 
-from delonghi_primadonna import device as dev  # noqa: E402
+
+@pytest.fixture(scope="module", autouse=True)
+def _stubbed_homeassistant():
+    """Install the fake homeassistant/bleak modules for this file only.
+
+    Installing them at module-import time (the previous approach) left
+    them in ``sys.modules`` for the rest of the pytest process, so any
+    test module collected afterwards that imports the real (or its own
+    stub) ``homeassistant``/``bleak`` got these fakes instead - measured
+    as collection going from 57 tests/0 errors to 44/4 once this file
+    was added. Doing it in a fixture confines the substitution to this
+    module's own test run and restores whatever was there before.
+    """
+    saved = {name: sys.modules.get(name) for name in _STUB_MODULE_NAMES}
+    _install_stubs()
+    sys.path.insert(0, "custom_components")
+
+    global dev
+    from delonghi_primadonna import device as dev_module
+    dev = dev_module
+
+    try:
+        yield
+    finally:
+        for name, module in saved.items():
+            if module is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
 
 
 @pytest.fixture
@@ -315,6 +361,62 @@ def test_disconnect_clears_advertisement_history(machine):
     machine._async_disconnected(MagicMock())
 
     assert CLEARED_HISTORY["addresses"] == [machine.mac]
+
+
+def test_disconnect_forgets_presence(machine):
+    """A disconnect must also clear ``_present``, not just the history.
+
+    Otherwise it stays stuck at its last True value, and the next
+    advertisement hits the no-op branch in ``_async_on_advertisement``
+    instead of the fresh-return one that resets the backoff.
+    """
+    machine._present = True
+
+    machine._async_disconnected(MagicMock())
+
+    assert machine._present is False
+
+
+def test_disconnect_survives_missing_clear_history(machine, monkeypatch):
+    """``async_clear_advertisement_history`` predates 2026.5.0.
+
+    hacs.json declares a 2023.7.0 floor, so calling it unconditionally
+    would raise AttributeError on every disconnect for anyone on an
+    older Home Assistant.
+    """
+    monkeypatch.delattr(dev.bluetooth, "async_clear_advertisement_history")
+
+    machine._async_disconnected(MagicMock())  # must not raise
+
+
+def test_user_command_bypasses_stale_backoff(machine):
+    """A backoff window from an earlier background failure must not
+    silently drop a command a person just triggered - the machine may
+    be advertising the entire time (e.g. it only refused a connection
+    because the De'Longhi app already holds its one slot).
+    """
+    PRESENT["value"] = True
+    machine._retry_after = time.monotonic() + 100
+    dev.establish_connection.reset_mock()
+
+    with pytest.raises(Exception):
+        asyncio.run(machine._connect(ignore_backoff=True))
+
+    assert dev.establish_connection.call_count == 1
+
+
+def test_background_connect_still_honours_backoff(machine):
+    """Without the flag, an active backoff window still blocks connect
+    attempts - this is what protects routine polling from hammering a
+    machine that keeps refusing connections.
+    """
+    machine._retry_after = time.monotonic() + 100
+    dev.establish_connection.reset_mock()
+
+    with pytest.raises(dev.DeviceNotPresent):
+        asyncio.run(machine._connect())
+
+    assert dev.establish_connection.call_count == 0
 
 
 def test_backoff_skips_connect_without_probing(machine):
